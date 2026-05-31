@@ -9,4 +9,12 @@ export default defineConfig({
       "@": path.resolve(__dirname, "./src"),
     },
   },
+  optimizeDeps: {
+    include: ['leaflet-draw']
+  },
+  build: {
+    commonjsOptions: {
+      include: [/leaflet-draw/, /node_modules/]
+    }
+  }
 })
