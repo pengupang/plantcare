@@ -1,5 +1,6 @@
 import Sidebar from './Sidebar'
 import { Outlet } from 'react-router-dom'
+import WeatherWidget from '../components/WeatherWidget'
 
 function MainLayout() {
   return (
@@ -8,6 +9,7 @@ function MainLayout() {
       <div className='flex-1'>
         <Outlet />
       </div>
+      <WeatherWidget />
     </div>
   )
 }
