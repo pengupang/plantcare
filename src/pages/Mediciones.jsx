@@ -17,6 +17,10 @@ function Mediciones() {
   const [ultimaMedicion, setUltimaMedicion] = useState(null)
   const [loadingMediciones, setLoadingMediciones] = useState(false)
 
+  const [recomendacion, setRecomendacion] = useState(null)
+  const [loadingIA, setLoadingIA] = useState(false)
+  const [errorIA, setErrorIA] = useState(null)
+
   useEffect(() => {
     const cargarClientes = async () => {
       setLoadingClientes(true)
@@ -70,8 +74,42 @@ function Mediciones() {
     cargarUltimaMedicion()
   }, [terrenoSeleccionado])
 
+  useEffect(() => {
+    setRecomendacion(null)
+    setErrorIA(null)
+  }, [terrenoSeleccionado])
+
   const valor = (campo) =>
     ultimaMedicion && ultimaMedicion[campo] != null ? ultimaMedicion[campo] : "n/a"
+
+  const obtenerRecomendacion = async () => {
+    if (!ultimaMedicion) return
+    setLoadingIA(true)
+    setErrorIA(null)
+    setRecomendacion(null)
+    try {
+      const res = await fetch("http://localhost:3001/api/recomendacion", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          nitrogeno: ultimaMedicion.nitrogeno,
+          fosforo: ultimaMedicion.fosforo,
+          potasio: ultimaMedicion.potasio,
+          ph: ultimaMedicion.ph,
+          humedad_suelo: ultimaMedicion.humedad_suelo,
+          temperatura_suelo: ultimaMedicion.temperatura_suelo,
+        }),
+      })
+      if (!res.ok) throw new Error("Error del servidor")
+      const data = await res.json()
+      setRecomendacion(data)
+    } catch (e) {
+      console.error(e)
+      setErrorIA("No se pudo generar la recomendación. ¿Está corriendo el servidor y Ollama?")
+    } finally {
+      setLoadingIA(false)
+    }
+  }
 
   return (
     <div className="min-h-screen bg-gray-100 p-8">
@@ -158,6 +196,43 @@ function Mediciones() {
         <Button className="bg-green-500 text-slate-50 p-2" disabled={!terrenoSeleccionado}>
           Guardar
         </Button>
+
+        <Button
+          onClick={obtenerRecomendacion}
+          disabled={!terrenoSeleccionado || !ultimaMedicion || loadingIA}
+          className="bg-blue-600 text-slate-50 p-2"
+        >
+          {loadingIA ? "Analizando terreno..." : "Generar recomendación IA"}
+        </Button>
+
+        {errorIA && <p className="text-red-600 text-sm">{errorIA}</p>}
+
+        {recomendacion && (
+          <Card>
+            <CardContent className="p-4 space-y-3">
+              <p className="font-semibold text-lg">{recomendacion.estado_general}</p>
+
+              {recomendacion.alertas?.length > 0 && (
+                <div className="space-y-1">
+                  {recomendacion.alertas.map((a, i) => (
+                    <p key={i} className="text-red-600 text-sm">⚠ {a}</p>
+                  ))}
+                </div>
+              )}
+
+              {recomendacion.recomendaciones?.length > 0 && (
+                <ul className="list-disc pl-5 space-y-1">
+                  {recomendacion.recomendaciones.map((r, i) => (
+                    <li key={i}>
+                      <span className="font-medium">{r.accion}</span> — {r.motivo}{" "}
+                      <span className="text-xs text-gray-500">({r.prioridad})</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </CardContent>
+          </Card>
+        )}
       </div>
     </div>
   )

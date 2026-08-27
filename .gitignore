@@ -24,3 +24,6 @@ dist-ssr
 *.sw?
 
 .env
+
+# Servidor local de IA (Ollama)
+server/
