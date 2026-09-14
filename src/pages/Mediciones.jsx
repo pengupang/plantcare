@@ -1,12 +1,11 @@
 import { useEffect, useState } from "react"
 import { supabase } from "../lib/supabase"
-import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from "@/components/ui/dropdown-menu"
-import { Card, CardContent, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
-import { Cloud, Sun, CloudRain, Thermometer, Droplets } from "lucide-react"
+import { Cloud, Sun, CloudRain, Thermometer, Droplets, Leaf, FlaskConical, Zap, TestTube, Activity, CheckCircle2, ShieldAlert, Clock, User, FileText } from "lucide-react"
+import { MetricaCard } from "@/components/ui/MetricaCard"
+import { SearchableSelect } from "@/components/SearchableSelect"
 
-// Mapeo simple de iconos de clima según el código WMO
 const getWeatherIcon = (code) => {
   if (code === 0 || code === 1) return <Sun className="h-6 w-6 text-yellow-500" />
   if (code >= 51 && code <= 65) return <CloudRain className="h-6 w-6 text-blue-500" />
@@ -31,6 +30,7 @@ function Mediciones() {
   const [ultimaMedicion, setUltimaMedicion] = useState(null)
   const [loadingMediciones, setLoadingMediciones] = useState(false)
 
+  const [observaciones, setObservaciones] = useState("")
   const [recomendacion, setRecomendacion] = useState(null)
   const [pronosticoClima, setPronosticoClima] = useState([])
   const [loadingIA, setLoadingIA] = useState(false)
@@ -39,11 +39,9 @@ function Mediciones() {
   useEffect(() => {
     const cargarClientes = async () => {
       setLoadingClientes(true)
-      const { data, error } = await supabase
-        .from("Clientes")
-        .select("id, nombre")
-        .order("nombre")
-      if (!error) setClientes(data)
+      const { data, error } = await supabase.from("Clientes").select("id, nombre").order("nombre")
+      if (error) console.error("Error cargando clientes:", error)
+      else setClientes(data || [])
       setLoadingClientes(false)
     }
     cargarClientes()
@@ -58,19 +56,23 @@ function Mediciones() {
     const cargarTerrenos = async () => {
       setLoadingTerrenos(true)
       setTerrenoSeleccionado(null)
+      
       const { data, error } = await supabase
         .from("Terrenos")
-        .select("id, nombre, crop_key")
+        .select("id, nombre")
         .eq("cliente_id", clienteSeleccionado.id)
         .order("nombre")
-      if (!error) setTerrenos(data)
+
+      if (error) console.error("Error cargando terrenos:", error)
+      else setTerrenos(data || [])
+      
       setLoadingTerrenos(false)
     }
     cargarTerrenos()
   }, [clienteSeleccionado])
 
   useEffect(() => {
-    if (!terrenoSeleccionado || !terrenoSeleccionado.crop_key) {
+    if (!terrenoSeleccionado) {
       setUltimaMedicion(null)
       setRecomendacion(null)
       setPronosticoClima([])
@@ -78,39 +80,34 @@ function Mediciones() {
       return
     }
 
-    const cargarDatosYSimular = async () => {
+    const cargarMedicionReal = async () => {
       setLoadingMediciones(true)
       setRecomendacion(null)
       setPronosticoClima([])
       setErrorIA(null)
-      
-      const { data } = await supabase
-        .from("referencias_cultivo")
-        .select("ref_nitrogeno, ref_fosforo, ref_potasio")
-        .eq("CROP_KEY", terrenoSeleccionado.crop_key)
+
+      const { data, error } = await supabase
+        .from("Mediciones")
+        .select("*")
+        .eq("terreno_id", terrenoSeleccionado.id)
+        .order("created_at", { ascending: false })
+        .limit(1)
         .maybeSingle()
 
-      const phSimulado = (Math.random() * (7.5 - 5.5) + 5.5).toFixed(1)
-      const humedadSimulada = (Math.random() * (80 - 40) + 40).toFixed(1)
-      const tempSimulada = (Math.random() * (28 - 12) + 12).toFixed(1)
+      if (error) {
+        console.error("Error al consultar mediciones en Supabase:", error)
+        setUltimaMedicion(null)
+      } else {
+        setUltimaMedicion(data ?? null)
+      }
 
-      setUltimaMedicion({
-        nitrogeno: data?.ref_nitrogeno ?? "n/a",
-        fosforo: data?.ref_fosforo ?? "n/a",
-        potasio: data?.ref_potasio ?? "n/a",
-        ph: parseFloat(phSimulado),
-        humedad_suelo: parseFloat(humedadSimulada),
-        temperatura_suelo: parseFloat(tempSimulada)
-      })
-      
       setLoadingMediciones(false)
     }
 
-    cargarDatosYSimular()
+    cargarMedicionReal()
   }, [terrenoSeleccionado])
 
-  const valor = (campo) =>
-    ultimaMedicion && ultimaMedicion[campo] != null ? ultimaMedicion[campo] : "n/a"
+  const valor = (campo) => (ultimaMedicion && ultimaMedicion[campo] != null ? ultimaMedicion[campo] : null)
 
   const obtenerRecomendacion = async () => {
     if (!ultimaMedicion) return
@@ -118,7 +115,7 @@ function Mediciones() {
     setErrorIA(null)
     setRecomendacion(null)
     setPronosticoClima([])
-    
+
     try {
       const res = await fetch("http://localhost:3001/api/recomendacion", {
         method: "POST",
@@ -131,11 +128,12 @@ function Mediciones() {
           ph: ultimaMedicion.ph,
           humedad_suelo: ultimaMedicion.humedad_suelo,
           temperatura_suelo: ultimaMedicion.temperatura_suelo,
+          observaciones_admin: observaciones,
         }),
       })
       if (!res.ok) throw new Error("Error del servidor")
       const data = await res.json()
-      
+
       setRecomendacion(data.recomendacion)
       setPronosticoClima(data.clima || [])
     } catch (e) {
@@ -146,87 +144,181 @@ function Mediciones() {
     }
   }
 
+  const metricos = [
+    { titulo: "Nitrógeno (N)", campo: "nitrogeno", unidad: "kg/ha", Icono: Leaf },
+    { titulo: "Fósforo (P)", campo: "fosforo", unidad: "kg/ha", Icono: FlaskConical },
+    { titulo: "Potasio (K)", campo: "potasio", unidad: "kg/ha", Icono: Zap },
+    { titulo: "pH del Suelo", campo: "ph", unidad: "pH", Icono: TestTube },
+    { titulo: "Humedad del Suelo", campo: "humedad_suelo", unidad: "%", Icono: Droplets },
+    { titulo: "Temperatura del Suelo", campo: "temperatura_suelo", unidad: "°C", Icono: Thermometer },
+    { titulo: "Conductividad", campo: "conductividad_electrica", unidad: "dS/m", Icono: Activity },
+  ]
+
   return (
-    <div className="min-h-screen bg-gray-100 p-8">
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl font-bold">Mediciones</h1>
+    <div className="p-6 md:p-8 bg-slate-100 min-h-screen">
+      {/* Header de la sección */}
+      <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-800">Mediciones y Diagnóstico IA</h1>
+          <p className="text-xs text-slate-500 mt-0.5">Supervisión técnica, validación de sensores y recomendaciones de cultivo</p>
+        </div>
 
-        <div className="flex gap-2">
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline" disabled={loadingClientes || clientes.length === 0}>
-                {loadingClientes ? "Cargando clientes..." : clienteSeleccionado?.nombre ?? "Seleccionar cliente"}
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent>
-              {clientes.map((c) => (
-                <DropdownMenuItem key={c.id} onClick={() => setClienteSeleccionado(c)}>
-                  {c.nombre}
-                </DropdownMenuItem>
-              ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
+        <div className="flex flex-wrap gap-2">
+          <SearchableSelect
+            items={clientes}
+            value={clienteSeleccionado}
+            onChange={(cliente) => setClienteSeleccionado(cliente)}
+            placeholder={loadingClientes ? "Cargando clientes..." : "Seleccionar cliente"}
+            searchPlaceholder="Buscar cliente..."
+            disabled={loadingClientes}
+          />
 
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline" disabled={!clienteSeleccionado || loadingTerrenos || terrenos.length === 0}>
-                {!clienteSeleccionado ? "Elegí un cliente primero" : terrenoSeleccionado?.nombre ?? "Seleccionar Terreno"}
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent>
-              {terrenos.map((t) => (
-                <DropdownMenuItem key={t.id} onClick={() => setTerrenoSeleccionado(t)}>
-                  {t.nombre}
-                </DropdownMenuItem>
-              ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
+          <SearchableSelect
+            items={terrenos}
+            value={terrenoSeleccionado}
+            onChange={(terreno) => setTerrenoSeleccionado(terreno)}
+            placeholder={!clienteSeleccionado ? "Elegí un cliente primero" : "Seleccionar Terreno"}
+            searchPlaceholder="Buscar terreno..."
+            disabled={!clienteSeleccionado || loadingTerrenos}
+          />
         </div>
       </div>
 
-      {terrenoSeleccionado && loadingMediciones && (
-        <p className="text-gray-500 mb-4">Cargando datos de referencia INIA y simulando sensores...</p>
+      {!terrenoSeleccionado && (
+        <div className="mb-6 rounded-2xl bg-amber-50 p-4 border border-amber-200/80 text-amber-800 text-sm shadow-sm flex items-center gap-3">
+          <ShieldAlert className="w-5 h-5 text-amber-600 shrink-0" />
+          <span>Selecciona un cliente y un terreno específico para consultar las mediciones en la base de datos.</span>
+        </div>
       )}
 
-      {/* Tarjetas de parámetros numéricos */}
-      <div className="grid grid-cols-3 gap-4 mb-6">
-        <Card><CardTitle className="p-4">Nitrógeno</CardTitle><CardContent>{valor("nitrogeno")}</CardContent></Card>
-        <Card><CardTitle className="p-4">Fósforo</CardTitle><CardContent>{valor("fosforo")}</CardContent></Card>
-        <Card><CardTitle className="p-4">Potasio</CardTitle><CardContent>{valor("potasio")}</CardContent></Card>
-        <Card><CardTitle className="p-4">pH</CardTitle><CardContent>{valor("ph")}</CardContent></Card>
-        <Card><CardTitle className="p-4">Humedad (%)</CardTitle><CardContent>{valor("humedad_suelo")}</CardContent></Card>
-        <Card><CardTitle className="p-4">Temperatura (°C)</CardTitle><CardContent>{valor("temperatura_suelo")}</CardContent></Card>
-      </div>
+      {terrenoSeleccionado && loadingMediciones && (
+        <p className="text-gray-500 mb-4 text-sm font-medium">Consultando registros en Supabase...</p>
+      )}
 
-      <div className="flex flex-col gap-4">
-        <Input type="text" placeholder="Observaciones" className="h-11 rounded-lg border border-gray-300 p-2" />
+      {terrenoSeleccionado && !loadingMediciones && !ultimaMedicion && (
+        <div className="mb-6 rounded-2xl bg-white p-6 border border-slate-200 text-slate-600 text-sm shadow-sm text-center">
+          ℹ️ Este terreno no cuenta con registros de mediciones en la base de datos actualmente.
+        </div>
+      )}
+
+      {/* Grid Principal de 2 Columnas */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         
-        <Button
-          onClick={obtenerRecomendacion}
-          disabled={!terrenoSeleccionado || !ultimaMedicion || loadingIA}
-          className="bg-blue-600 hover:bg-blue-700 text-slate-50 p-2"
-        >
-          {loadingIA ? "Analizando terreno y clima regional..." : "Generar recomendación IA"}
-        </Button>
-
-        {errorIA && <p className="text-red-600 text-sm">{errorIA}</p>}
-
-        {/* Zona de Análisis Integral: IA (Izquierda) + Clima (Derecha) */}
-        {recomendacion && (
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-2">
-            
-            {/* Columna Izquierda: Reporte IA (Ocupa 2/3 del espacio) */}
-            <Card className="lg:col-span-2 border-blue-100 shadow-md">
-              <CardContent className="p-5 space-y-4">
+        {/* Columna Izquierda Principal (2/3): Validación y Métricas */}
+        <div className="lg:col-span-2 flex flex-col gap-6">
+          
+          {/* Panel de Supervisión y Validación de Lectura (HU-ADM-04) */}
+          {terrenoSeleccionado && ultimaMedicion && (
+            <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-200/60 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-700 flex items-center justify-center border border-emerald-100">
+                  <CheckCircle2 className="w-5 h-5" />
+                </div>
                 <div>
-                  <h3 className="text-sm text-blue-600 font-bold uppercase tracking-wider mb-1">Diagnóstico IA</h3>
-                  <p className="font-semibold text-lg">{recomendacion.estado_general}</p>
+                  <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Estado de Lectura IoT</h3>
+                  {/* TODO: Conectar con la columna real de estado_validacion en Supabase */}
+                  <p className="text-sm font-semibold text-slate-700 flex items-center gap-2 mt-0.5">
+                    <span className="w-2.5 h-2.5 rounded-full bg-emerald-500"></span>
+                    Validada y Registrada Oficialmente
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2 w-full sm:w-auto">
+                <span className="text-xs text-slate-400">ID Registro: #{ultimaMedicion.id ?? "N/A"}</span>
+              </div>
+            </div>
+          )}
+
+          {/* Cuadrícula de Métricas de Suelo */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {metricos.map((m) => (
+              <MetricaCard
+                key={m.campo}
+                titulo={m.titulo}
+                campo={m.campo}
+                unidad={m.unidad}
+                Icono={m.Icono}
+                valor={valor(m.campo)}
+              />
+            ))}
+          </div>
+
+        </div>
+
+        {/* Columna Derecha Lateral (1/3): Control Operativo, Bitácora IA y Clima Regional */}
+        <div className="lg:col-span-1 flex flex-col gap-6">
+          
+          {/* Módulo de Trazabilidad y Visita a Terreno (HU-ADM-03) */}
+          <div className="rounded-2xl bg-white p-5 shadow-sm border border-slate-200/60">
+            <div className="flex items-center gap-2 mb-4 pb-3 border-b border-slate-100">
+              <div className="w-8 h-8 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center">
+                <User className="w-4 h-4" />
+              </div>
+              <div>
+                <h3 className="font-bold text-slate-800 text-sm">Control Operativo</h3>
+                <p className="text-xs text-slate-500">Trazabilidad de Inspección</p>
+              </div>
+            </div>
+
+            {!terrenoSeleccionado ? (
+              <p className="text-xs text-slate-500 py-4 text-center">
+                Selecciona un terreno para ver los datos de la visita técnica.
+              </p>
+            ) : (
+              <div className="space-y-3 text-xs">
+                <div className="flex items-center justify-between p-2.5 bg-slate-50 rounded-xl border border-slate-100">
+                  <span className="text-slate-500 flex items-center gap-1.5 font-medium"><User className="w-3.5 h-3.5 text-slate-400"/> Técnico a cargo:</span>
+                  {/* TODO: Vincular con columna tecnico_responsable en Supabase */}
+                  <span className="font-semibold text-slate-700">Administrador / IoT</span>
+                </div>
+
+                <div className="flex items-center justify-between p-2.5 bg-slate-50 rounded-xl border border-slate-100">
+                  <span className="text-slate-500 flex items-center gap-1.5 font-medium"><Clock className="w-3.5 h-3.5 text-slate-400"/> Sincronización:</span>
+                  <span className="font-semibold text-slate-700">
+                    {ultimaMedicion?.created_at ? new Date(ultimaMedicion.created_at).toLocaleDateString("es-CL") : "N/A"}
+                  </span>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Bloque de Observaciones y Generación de Diagnóstico IA */}
+          <div className="flex flex-col gap-4 rounded-2xl bg-white p-5 shadow-sm border border-slate-200/60">
+            <div className="flex items-center gap-2 text-slate-800 font-bold text-sm">
+              <FileText className="w-4 h-4 text-emerald-700" />
+              <span>Bitácora de Observaciones Técnicas</span>
+            </div>
+
+            <Input 
+              type="text" 
+              placeholder="Ej. Aplicar riego nocturno adicional..." 
+              value={observaciones}
+              onChange={(e) => setObservaciones(e.target.value)}
+              className="h-10 rounded-xl border border-slate-200 bg-slate-50/50 p-3 text-xs" 
+            />
+
+            <Button
+              onClick={obtenerRecomendacion}
+              disabled={!terrenoSeleccionado || !ultimaMedicion || loadingIA}
+              className="bg-emerald-700 hover:bg-emerald-800 h-10 text-white font-medium rounded-xl transition-colors shadow-sm text-xs"
+            >
+              {loadingIA ? "Analizando terreno..." : "Generar recomendación IA"}
+            </Button>
+
+            {errorIA && <p className="text-red-600 text-xs font-medium">{errorIA}</p>}
+
+            {/* Resultados del Diagnóstico IA */}
+            {recomendacion && (
+              <div className="mt-2 pt-3 border-t border-slate-100 space-y-3">
+                <div>
+                  <h3 className="mb-1 text-xs font-bold uppercase tracking-wider text-emerald-700">Diagnóstico IA</h3>
+                  <p className="font-semibold text-sm text-slate-800">{recomendacion.estado_general}</p>
                 </div>
 
                 {recomendacion.alertas?.length > 0 && (
-                  <div className="space-y-2 p-3 bg-red-50 rounded-md border border-red-100">
+                  <div className="space-y-1.5 p-3 bg-red-50 rounded-xl border border-red-100">
                     {recomendacion.alertas.map((a, i) => (
-                      <p key={i} className="text-red-700 text-sm font-medium flex gap-2">
+                      <p key={i} className="text-red-700 text-xs font-medium flex gap-1.5">
                         <span>⚠</span> {a}
                       </p>
                     ))}
@@ -234,58 +326,55 @@ function Mediciones() {
                 )}
 
                 {recomendacion.recomendaciones?.length > 0 && (
-                  <div className="mt-4">
-                    <h4 className="font-semibold mb-2">Plan de Acción:</h4>
-                    <ul className="space-y-3">
+                  <div className="mt-2">
+                    <h4 className="font-semibold mb-2 text-slate-800 text-xs">Plan de Acción:</h4>
+                    <ul className="space-y-2">
                       {recomendacion.recomendaciones.map((r, i) => (
-                        <li key={i} className="bg-gray-50 p-3 rounded-md border border-gray-100 text-sm">
+                        <li key={i} className="bg-slate-50 p-2.5 rounded-xl border border-slate-100 text-xs">
                           <div className="flex justify-between items-start mb-1">
-                            <span className="font-bold text-gray-800">{r.accion}</span>
-                            <span className={`text-xs px-2 py-1 rounded-full font-semibold ${
+                            <span className="font-bold text-slate-800">{r.accion}</span>
+                            <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-semibold ${
                               r.prioridad === 'alta' ? 'bg-red-100 text-red-700' : 
-                              r.prioridad === 'media' ? 'bg-yellow-100 text-yellow-700' : 'bg-green-100 text-green-700'
+                              r.prioridad === 'media' ? 'bg-yellow-100 text-yellow-700' : 'bg-emerald-100 text-emerald-700'
                             }`}>
                               {r.prioridad}
                             </span>
                           </div>
-                          <p className="text-gray-600">{r.motivo}</p>
+                          <p className="text-slate-600 text-[11px] mt-0.5">{r.motivo}</p>
                         </li>
                       ))}
                     </ul>
                   </div>
                 )}
-              </CardContent>
-            </Card>
-
-            {/* Columna Derecha: Tarjetas Visuales de Clima (Ocupa 1/3 del espacio) */}
-            {pronosticoClima.length > 0 && (
-              <div className="lg:col-span-1 space-y-3">
-                <h4 className="text-sm font-bold text-gray-600 mb-1 ml-1">Clima considerado:</h4>
-                <div className="flex flex-col gap-3">
-                  {pronosticoClima.map((dia, idx) => (
-                    <Card key={idx} className="bg-white border shadow-sm">
-                      <CardContent className="p-4 flex items-center justify-between">
-                        <div>
-                          <p className="font-semibold capitalize text-sm">{formatDia(dia.fecha)}</p>
-                          <div className="flex items-center gap-2 mt-1 text-xs text-gray-600">
-                            <Thermometer className="h-3 w-3" /> {dia.min}° - {dia.max}°
-                          </div>
-                          <div className="flex items-center gap-2 mt-1 text-xs text-gray-600">
-                            <Droplets className="h-3 w-3 text-blue-500" /> {dia.probLluvia}% ({dia.lluvia}mm)
-                          </div>
-                        </div>
-                        <div>
-                          {getWeatherIcon(dia.codigo)}
-                        </div>
-                      </CardContent>
-                    </Card>
-                  ))}
-                </div>
               </div>
             )}
-
           </div>
-        )}
+
+          {/* Panel de Pronóstico del Clima Regional */}
+          {pronosticoClima.length > 0 && (
+            <div className="space-y-3 bg-white p-5 rounded-2xl shadow-sm border border-slate-200/60">
+              <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Clima Regional Considerado</h4>
+              <div className="flex flex-col gap-2.5">
+                {pronosticoClima.map((dia, idx) => (
+                  <div key={idx} className="flex items-center justify-between bg-slate-50 p-2.5 rounded-xl border border-slate-100 shadow-sm">
+                    <div>
+                      <p className="font-semibold capitalize text-xs text-slate-800">{formatDia(dia.fecha)}</p>
+                      <div className="flex items-center gap-1 mt-0.5 text-xs text-slate-500">
+                        <Thermometer className="h-3 w-3" /> {dia.min}° - {dia.max}°
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-blue-600 font-medium">{dia.probLluvia}%</span>
+                      {getWeatherIcon(dia.codigo)}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+        </div>
+
       </div>
     </div>
   )

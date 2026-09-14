@@ -1,9 +1,11 @@
 import { useEffect, useState } from "react"
 import { supabase } from "../lib/supabase"
-import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from "@/components/ui/dropdown-menu"
-import { Card, CardTitle, CardContent } from "@/components/ui/card"
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts"
 import { Button } from "@/components/ui/button"
+import { Leaf, FlaskConical, Zap, TestTube, Droplets, Thermometer, Bot, AlertTriangle, CheckCircle2 } from "lucide-react"
+import { MetricaCard } from "@/components/ui/MetricaCard"
+import { SearchableSelect } from "../components/SearchableSelect"
+import { MapaTerreno } from "@/components/MapaTerreno"
 
 function formatFecha(fechaISO) {
   const d = new Date(fechaISO)
@@ -14,11 +16,11 @@ function Dashboard() {
   const [clientes, setClientes] = useState([])
   const [loadingClientes, setLoadingClientes] = useState(true)
 
-  const [clienteSeleccionado, setClienteSeleccionado] = useState(null) // { id, nombre }
+  const [clienteSeleccionado, setClienteSeleccionado] = useState(null)
   const [terrenos, setTerrenos] = useState([])
   const [loadingTerrenos, setLoadingTerrenos] = useState(false)
 
-  const [terrenoSeleccionado, setTerrenoSeleccionado] = useState(null) // { id, nombre }
+  const [terrenoSeleccionado, setTerrenoSeleccionado] = useState(null)
   const [ultimaMedicion, setUltimaMedicion] = useState(null)
   const [historial, setHistorial] = useState([])
   const [loadingMediciones, setLoadingMediciones] = useState(false)
@@ -26,11 +28,8 @@ function Dashboard() {
   useEffect(() => {
     const cargarClientes = async () => {
       setLoadingClientes(true)
-      const { data, error } = await supabase
-        .from("Clientes")
-        .select("id, nombre")
-        .order("nombre")
-      if (!error) setClientes(data)
+      const { data, error } = await supabase.from("Clientes").select("id, nombre").order("nombre")
+      if (!error) setClientes(data || [])
       setLoadingClientes(false)
     }
     cargarClientes()
@@ -50,7 +49,7 @@ function Dashboard() {
         .select("id, nombre")
         .eq("cliente_id", clienteSeleccionado.id)
         .order("nombre")
-      if (!error) setTerrenos(data)
+      if (!error) setTerrenos(data || [])
       setLoadingTerrenos(false)
     }
     cargarTerrenos()
@@ -92,105 +91,135 @@ function Dashboard() {
     cargarMediciones()
   }, [terrenoSeleccionado])
 
-  const valor = (campo) =>
-    ultimaMedicion && ultimaMedicion[campo] != null ? ultimaMedicion[campo] : "n/a"
+  const metricasConfig = [
+    { titulo: "Nitrógeno (N)", campo: "nitrogeno", unidad: "kg/ha", Icono: Leaf },
+    { titulo: "Fósforo (P)", campo: "fosforo", unidad: "kg/ha", Icono: FlaskConical },
+    { titulo: "Potasio (K)", campo: "potasio", unidad: "kg/ha", Icono: Zap },
+    { titulo: "pH", campo: "ph", unidad: "pH", Icono: TestTube },
+    { titulo: "Humedad", campo: "humedad_suelo", unidad: "%", Icono: Droplets },
+    { titulo: "Temperatura", campo: "temperatura_suelo", unidad: "°C", Icono: Thermometer },
+    { titulo: "Conductividad", campo: "conductividad_electrica", unidad: "dS/m", Icono: Zap },
+  ]
 
   return (
-    <div className="min-h-screen bg-gray-100 p-8">
-      <div className="flex justify-between items-center mb-6 ">
-        <h1 className="text-2xl font-bold">Dashboard</h1>
+    <div className="p-6 md:p-8 bg-slate-100 min-h-screen">
+      <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <h1 className="text-2xl font-bold text-slate-800">Dashboard de Administración</h1>
 
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="outline" disabled={loadingClientes || clientes.length === 0}>
-              {loadingClientes
-                ? "Cargando clientes..."
-                : clientes.length === 0
-                ? "No hay clientes"
-                : clienteSeleccionado?.nombre ?? "Seleccionar cliente"}
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent>
-            {clientes.map((c) => (
-              <DropdownMenuItem key={c.id} onClick={() => setClienteSeleccionado(c)}>
-                {c.nombre}
-              </DropdownMenuItem>
-            ))}
-          </DropdownMenuContent>
-        </DropdownMenu>
+        <div className="flex flex-wrap gap-2">
+          <SearchableSelect
+            items={clientes}
+            value={clienteSeleccionado}
+            onChange={(cliente) => setClienteSeleccionado(cliente)}
+            placeholder={loadingClientes ? "Cargando clientes..." : "Seleccionar cliente"}
+            searchPlaceholder="Buscar cliente..."
+            disabled={loadingClientes}
+          />
 
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button
-              variant="outline"
-              disabled={!clienteSeleccionado || loadingTerrenos || terrenos.length === 0}
-            >
-              {!clienteSeleccionado
-                ? "Elegí un cliente primero"
-                : loadingTerrenos
-                ? "Cargando terrenos..."
-                : terrenos.length === 0
-                ? "Sin terrenos"
-                : terrenoSeleccionado?.nombre ?? "Seleccionar Terreno"}
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent>
-            {terrenos.map((t) => (
-              <DropdownMenuItem key={t.id} onClick={() => setTerrenoSeleccionado(t)}>
-                {t.nombre}
-              </DropdownMenuItem>
-            ))}
-          </DropdownMenuContent>
-        </DropdownMenu>
+          <SearchableSelect
+            items={terrenos}
+            value={terrenoSeleccionado}
+            onChange={(terreno) => setTerrenoSeleccionado(terreno)}
+            placeholder={!clienteSeleccionado ? "Elegí un cliente primero" : "Seleccionar Terreno"}
+            searchPlaceholder="Buscar terreno..."
+            disabled={!clienteSeleccionado || loadingTerrenos}
+          />
+        </div>
       </div>
 
-      <div className="grid grid-cols-3 gap-4 mb-4">
-        <Card>
-          <CardTitle className="p-4">Nitrógeno</CardTitle>
-          <CardContent>{valor("nitrogeno")}</CardContent>
-        </Card>
-        <Card>
-          <CardTitle className="p-4">Fósforo</CardTitle>
-          <CardContent>{valor("fosforo")}</CardContent>
-        </Card>
-        <Card>
-          <CardTitle className="p-4">Potasio</CardTitle>
-          <CardContent>{valor("potasio")}</CardContent>
-        </Card>
-        <Card>
-          <CardTitle className="p-4">pH</CardTitle>
-          <CardContent>{valor("ph")}</CardContent>
-        </Card>
-        <Card>
-          <CardTitle className="p-4">Humedad</CardTitle>
-          <CardContent>{valor("humedad_suelo")}</CardContent>
-        </Card>
-        <Card>
-          <CardTitle className="p-4">Temperatura</CardTitle>
-          <CardContent>{valor("temperatura_suelo")}</CardContent>
-        </Card>
-      </div>
+      {!terrenoSeleccionado && (
+        <div className="mb-6 rounded-xl bg-amber-50 p-4 border border-amber-200 text-amber-800 text-sm shadow-sm">
+          ⚠️ Selecciona un cliente y un terreno en la esquina superior derecha para visualizar las métricas y recomendaciones en tiempo real.
+        </div>
+      )}
 
-      <div className="bg-white rounded-lg p-4 border border-gray-200">
-        <h2 className="text-lg font-bold mb-4">Historial de mediciones (Nitrógeno)</h2>
-        {!terrenoSeleccionado && (
-          <p className="text-gray-500">Seleccioná un cliente y un terreno para ver su historial.</p>
-        )}
-        {terrenoSeleccionado && loadingMediciones && <p className="text-gray-500">Cargando...</p>}
-        {terrenoSeleccionado && !loadingMediciones && historial.length === 0 && (
-          <p className="text-gray-500">Este terreno todavía no tiene mediciones registradas.</p>
-        )}
-        {terrenoSeleccionado && !loadingMediciones && historial.length > 0 && (
-          <ResponsiveContainer width="100%" height={300}>
-            <LineChart data={historial}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="fecha" />
-              <YAxis />
-              <Tooltip />
-              <Line type="monotone" dataKey="valor" stroke="#22c55e" />
-            </LineChart>
-          </ResponsiveContainer>
-        )}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Columna Izquierda (2/3): Métricas, Gráfico y Mapa */}
+        <div className="lg:col-span-2 flex flex-col gap-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {metricasConfig.map((m) => (
+              <MetricaCard
+                key={m.campo}
+                titulo={m.titulo}
+                campo={m.campo}
+                unidad={m.unidad}
+                Icono={m.Icono}
+                valor={ultimaMedicion ? ultimaMedicion[m.campo] : null}
+              />
+            ))}
+          </div>
+
+          {/* Gráfico de Historial */}
+          <div className="rounded-2xl bg-white p-6 shadow-sm border border-slate-200/60">
+            <h2 className="mb-4 text-lg font-bold text-slate-800">Historial de mediciones (Nitrógeno)</h2>
+            {!terrenoSeleccionado && <p className="text-gray-500 text-sm">Seleccioná un cliente y un terreno para ver su historial.</p>}
+            {terrenoSeleccionado && loadingMediciones && <p className="text-gray-500 text-sm">Cargando...</p>}
+            {terrenoSeleccionado && !loadingMediciones && historial.length === 0 && (
+              <p className="text-gray-500 text-sm">Este terreno todavía no tiene mediciones registradas.</p>
+            )}
+            {terrenoSeleccionado && !loadingMediciones && historial.length > 0 && (
+              <ResponsiveContainer width="100%" height={260}>
+                <LineChart data={historial}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                  <XAxis dataKey="fecha" stroke="#64748b" />
+                  <YAxis stroke="#64748b" />
+                  <Tooltip />
+                  <Line type="monotone" dataKey="valor" stroke="#16a34a" strokeWidth={2} />
+                </LineChart>
+              </ResponsiveContainer>
+            )}
+          </div>
+
+          {/* Mapa de ubicación del terreno */}
+          <MapaTerreno terreno={terrenoSeleccionado} />
+        </div>
+
+        {/* Columna Derecha (1/3): Panel de IA */}
+        <div className="lg:col-span-1 flex flex-col gap-4">
+          <div className="rounded-2xl bg-white p-5 shadow-sm border border-slate-200/60">
+            <div className="flex items-center gap-2 mb-4 pb-3 border-b border-slate-100">
+              <div className="w-8 h-8 rounded-lg bg-green-100 text-green-700 flex items-center justify-center">
+                <Bot className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="font-bold text-slate-800 text-sm">Asistente PlantCare</h3>
+                <p className="text-xs text-slate-500">Recomendaciones y Sugerencias</p>
+              </div>
+            </div>
+
+            {!terrenoSeleccionado ? (
+              <p className="text-sm text-slate-500 py-6 text-center">
+                Selecciona un terreno para activar el análisis inteligente del suelo.
+              </p>
+            ) : (
+              <div className="space-y-3">
+                <div className="p-3 rounded-xl bg-orange-50 border border-orange-100 flex gap-3 items-start">
+                  <AlertTriangle className="w-5 h-5 text-orange-600 shrink-0 mt-0.5" />
+                  <div>
+                    <h4 className="text-xs font-bold text-orange-800 uppercase tracking-wide">Precaución en Nitrógeno</h4>
+                    <p className="text-xs text-orange-700 mt-0.5">Los niveles actuales están por debajo del óptimo para el cultivo actual.</p>
+                  </div>
+                </div>
+
+                <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-100 flex gap-3 items-start">
+                  <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
+                  <div>
+                    <h4 className="text-xs font-bold text-emerald-800 uppercase tracking-wide">pH Estable</h4>
+                    <p className="text-xs text-emerald-700 mt-0.5">El nivel de acidez se encuentra dentro del rango adecuado de asimilación.</p>
+                  </div>
+                </div>
+
+                <div className="mt-4 pt-3 border-t border-slate-100">
+                  <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider block mb-2">Estado del Sistema</span>
+                  <div className="flex items-center justify-between text-xs text-slate-600 bg-slate-50 p-2.5 rounded-xl border border-slate-100">
+                    <span>Modelo conectado</span>
+                    <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
       </div>
     </div>
   )
