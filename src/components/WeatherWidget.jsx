@@ -100,7 +100,7 @@ function WeatherWidget() {
       <Button
         variant="outline"
         size="icon"
-        className="fixed topdown-6 right-4 z-40 rounded-full bg-white shadow-md"
+        className="fixed bottom-6 right-4 z-40 rounded-full bg-green-700 text-white hover:bg-green-800 shadow-md border-0"
         onClick={() => setOpen((v) => !v)}
         aria-label="Ver el clima"
       >
@@ -108,18 +108,18 @@ function WeatherWidget() {
       </Button>
 
       {open && (
-        <Card className="fixed top-16 right-4 z-40 w-80 max-h-[80vh] overflow-y-auto shadow-xl">
+        <Card className="fixed top-16 right-4 z-40 w-80 max-h-[80vh] overflow-y-auto bg-white shadow-xl rounded-2xl border border-slate-200/80">
           <CardContent className="p-4">
             <div className="flex justify-between items-center mb-3">
-              <h3 className="font-bold text-base">Clima — {ubicacionNombre}</h3>
-              <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setOpen(false)}>
+              <h3 className="font-bold text-base text-slate-800">Clima — {ubicacionNombre}</h3>
+              <Button variant="ghost" size="icon" className="h-6 w-6 rounded-lg" onClick={() => setOpen(false)}>
                 <X className="h-4 w-4" />
               </Button>
             </div>
 
             {loading && (
               <div className="flex items-center gap-2 text-gray-500 text-sm py-4">
-                <Loader2 className="h-4 w-4 animate-spin" />
+                <Loader2 className="h-4 w-4 animate-spin text-green-700" />
                 Cargando clima...
               </div>
             )}
@@ -127,10 +127,10 @@ function WeatherWidget() {
             {error && <p className="text-red-600 text-sm">{error}</p>}
 
             {!loading && actual && (
-              <div className="mb-4 pb-3 border-b border-gray-200">
-                <p className="text-3xl font-bold">{Math.round(actual.temperature_2m)}°C</p>
-                <p className="text-sm text-gray-600">{descripcionClima(actual.weather_code)}</p>
-                <p className="text-xs text-gray-500 mt-1">
+              <div className="mb-4 pb-3 border-b border-slate-100">
+                <p className="text-3xl font-bold text-slate-900">{Math.round(actual.temperature_2m)}°C</p>
+                <p className="text-sm text-slate-600">{descripcionClima(actual.weather_code)}</p>
+                <p className="text-xs text-slate-500 mt-1">
                   Humedad: {actual.relative_humidity_2m}% · Viento: {Math.round(actual.wind_speed_10m)} km/h
                 </p>
               </div>
@@ -138,13 +138,13 @@ function WeatherWidget() {
 
             {!loading && diario.length > 0 && (
               <div className="space-y-2">
-                <p className="text-xs font-semibold text-gray-500 uppercase">Próximos días</p>
+                <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Próximos días</p>
                 {diario.map((d) => (
-                  <div key={d.fecha} className="flex justify-between items-center text-sm">
-                    <span className="capitalize w-20">{formatDia(d.fecha)}</span>
-                    <span className="flex-1 text-gray-600 text-xs px-2">{descripcionClima(d.codigo)}</span>
-                    <span className="text-xs text-blue-600 w-10 text-right">{d.probLluvia}%</span>
-                    <span className="w-16 text-right">
+                  <div key={d.fecha} className="flex justify-between items-center text-sm py-1">
+                    <span className="capitalize w-20 text-slate-700 font-medium">{formatDia(d.fecha)}</span>
+                    <span className="flex-1 text-slate-600 text-xs px-2 truncate">{descripcionClima(d.codigo)}</span>
+                    <span className="text-xs text-blue-600 w-10 text-right font-medium">{d.probLluvia}%</span>
+                    <span className="w-16 text-right text-slate-800 font-semibold text-xs">
                       {Math.round(d.max)}° / {Math.round(d.min)}°
                     </span>
                   </div>
