@@ -3,6 +3,7 @@ import { Menu } from 'lucide-react'
 import { Outlet } from 'react-router-dom'
 import Sidebar from './Sidebar'
 import WeatherWidget from '../components/WeatherWidget'
+import Footer from '@/components/Footer'    
 
 function MainLayout() {
   const [sidebarOpen, setSidebarOpen] = useState(false)
@@ -28,6 +29,7 @@ function MainLayout() {
         <main className="flex-1 bg-slate-50">
           <Outlet />
         </main>
+        <Footer />
       </div>
 
       <WeatherWidget />
