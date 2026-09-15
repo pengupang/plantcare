@@ -2,7 +2,8 @@ import { useEffect, useState } from "react"
 import { supabase } from "../lib/supabase"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
-import { Cloud, Sun, CloudRain, Thermometer, Droplets, Leaf, FlaskConical, Zap, TestTube, Activity, CheckCircle2, ShieldAlert, Clock, User, FileText } from "lucide-react"
+import { Cloud, Sun, CloudRain, Thermometer, Droplets, Leaf, FlaskConical, Zap, 
+  TestTube, Activity, CheckCircle2, ShieldAlert, Clock, User, FileText, Info, } from "lucide-react"
 import { MetricaCard } from "@/components/ui/MetricaCard"
 import { SearchableSelect } from "@/components/SearchableSelect"
 
@@ -196,8 +197,9 @@ function Mediciones() {
       )}
 
       {terrenoSeleccionado && !loadingMediciones && !ultimaMedicion && (
-        <div className="mb-6 rounded-2xl bg-white p-6 border border-slate-200 text-slate-600 text-sm shadow-sm text-center">
-          ℹ️ Este terreno no cuenta con registros de mediciones en la base de datos actualmente.
+        <div className="mb-6 rounded-2xl bg-white p-6 border border-slate-200 text-slate-600 text-sm shadow-sm flex items-center justify-center gap-2.5">
+          <Info className="w-5 h-5 text-emerald-700 shrink-0" />
+          <span>Este terreno no cuenta con registros de mediciones en la base de datos actualmente.</span>
         </div>
       )}
 

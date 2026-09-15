@@ -1,5 +1,5 @@
 import { NavLink, useNavigate } from 'react-router-dom'
-import { X, LogOut } from 'lucide-react'
+import { X, LogOut, Leaf } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 
 const links = [
@@ -35,6 +35,7 @@ function Sidebar({ open, onClose }) {
         <div>
           <div className="mb-10 flex items-center justify-between px-2">
             <h1 className="text-xl font-bold tracking-wider text-emerald-100 flex items-center gap-2">
+              <Leaf className="w-7 h-7" />
               Plant<span className="text-emerald-400">Care</span>
             </h1>
             <button
