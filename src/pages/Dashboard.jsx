@@ -2,7 +2,8 @@ import { useEffect, useState } from "react"
 import { supabase } from "../lib/supabase"
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts"
 import { Button } from "@/components/ui/button"
-import { Leaf, FlaskConical, Zap, TestTube, Droplets, Thermometer, Bot, AlertTriangle, CheckCircle2 } from "lucide-react"
+import { Leaf, FlaskConical, Zap, TestTube, Droplets, Thermometer, Bot, AlertTriangle, 
+  CheckCircle2, ShieldAlert, RefreshCw, Wheat, Sprout, Flower, Info } from "lucide-react"
 import { MetricaCard } from "@/components/ui/MetricaCard"
 import { SearchableSelect } from "../components/SearchableSelect"
 import { MapaTerreno } from "@/components/MapaTerreno"
@@ -128,8 +129,20 @@ function Dashboard() {
       </div>
 
       {!terrenoSeleccionado && (
-        <div className="mb-6 rounded-xl bg-amber-50 p-4 border border-amber-200 text-amber-800 text-sm shadow-sm">
-          ⚠️ Selecciona un cliente y un terreno en la esquina superior derecha para visualizar las métricas y recomendaciones en tiempo real.
+        <div className="mb-6 rounded-2xl bg-amber-50 p-4 border border-amber-200/80 text-amber-800 text-sm shadow-sm flex items-center gap-3">
+          <ShieldAlert className="w-5 h-5 text-amber-600 shrink-0" />
+          <span>Selecciona un cliente y un terreno específico para consultar las mediciones en la base de datos.</span>
+        </div>
+      )}
+
+      {terrenoSeleccionado && loadingMediciones && (
+        <p className="text-gray-500 mb-4 text-sm font-medium">Consultando registros en Supabase...</p>
+      )}
+
+      {terrenoSeleccionado && !loadingMediciones && !ultimaMedicion && (
+        <div className="mb-6 rounded-2xl bg-white p-6 border border-slate-200 text-slate-600 text-sm shadow-sm flex items-center justify-center gap-2.5">
+          <Info className="w-5 h-5 text-emerald-700 shrink-0" />
+          <span>Este terreno no cuenta con registros de mediciones en la base de datos actualmente.</span>
         </div>
       )}
 
@@ -219,7 +232,73 @@ function Dashboard() {
               </div>
             )}
           </div>
+          {/* Plan de Rotación de Cultivos */}
+          <div className="rounded-2xl bg-white p-5 shadow-sm border border-slate-200/60">
+            <div className="flex items-center gap-2 mb-4 pb-3 border-b border-slate-100">
+              <div className="w-8 h-8 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center">
+                <RefreshCw className="w-4 h-4" />
+              </div>
+              <h3 className="font-bold text-slate-800 text-sm">Plan de Rotación de Cultivos</h3>
+            </div>
+
+            {!terrenoSeleccionado ? (
+              <p className="text-sm text-slate-500 py-4 text-center">
+                Selecciona un terreno para ver su plan de rotación.
+              </p>
+            ) : (
+              <div className="space-y-3">
+                {/* Cultivo Actual */}
+                <div className="flex items-center justify-between p-3.5 rounded-xl bg-emerald-50/60 border border-emerald-100">
+                  <div className="flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0">
+                      <Wheat className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <h4 className="font-bold text-slate-800 text-xs">Trigo</h4>
+                      <p className="text-[11px] text-slate-500">Abr – Sep</p>
+                    </div>
+                  </div>
+                  <span className="bg-emerald-600 text-white text-[10px] font-semibold px-2.5 py-1 rounded-full shadow-sm">
+                    Actual
+                  </span>
+                </div>
+
+                {/* Cultivo Próximo */}
+                <div className="flex items-center justify-between p-3.5 rounded-xl bg-amber-50/60 border border-amber-100">
+                  <div className="flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center shrink-0">
+                      <Sprout className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <h4 className="font-bold text-slate-800 text-xs">Lupino</h4>
+                      <p className="text-[11px] text-slate-500">Oct – Feb</p>
+                    </div>
+                  </div>
+                  <span className="bg-amber-600 text-white text-[10px] font-semibold px-2.5 py-1 rounded-full shadow-sm">
+                    Próximo
+                  </span>
+                </div>
+
+                {/* Cultivo Planificado */}
+                <div className="flex items-center justify-between p-3.5 rounded-xl bg-slate-50 border border-slate-200/60">
+                  <div className="flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-xl bg-slate-200 text-slate-700 flex items-center justify-center shrink-0">
+                      <Flower className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <h4 className="font-bold text-slate-800 text-xs">Canola</h4>
+                      <p className="text-[11px] text-slate-500">Mar – Jul</p>
+                    </div>
+                  </div>
+                  <span className="bg-slate-200 text-slate-600 text-[10px] font-semibold px-2.5 py-1 rounded-full">
+                    Planificado
+                  </span>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
+        
       </div>
     </div>
   )
