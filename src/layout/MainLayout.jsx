@@ -23,7 +23,7 @@ function MainLayout() {
           >
             <Menu className="h-6 w-6" />
           </button>
-          <span className="text-lg font-semibold text-green-800">PlantCare</span>
+          <span className=" text-lg font-semibold text-green-800 ">PlantCare</span>
         </header>
 
         <main className="flex-1 bg-slate-50">

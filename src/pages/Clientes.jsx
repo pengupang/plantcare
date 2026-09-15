@@ -192,7 +192,17 @@ function Clientes() {
             )}
             {clientesFiltrados.map((cliente) => (
               <TableRow key={cliente.id} className="border-b border-slate-100 hover:bg-slate-50/60 transition-colors">
-                <TableCell className="px-6 py-4 font-medium text-slate-800">{cliente.nombre}</TableCell>
+                <TableCell className="px-6 py-4">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="font-medium text-slate-800">{cliente.nombre}</span>
+                    {/* Indicador de Estado */}
+                    {/* TODO: Reemplazar 'true' por la propiedad real de Supabase (ej: cliente.activo) */}
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200/60 shrink-0">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                      Activo
+                    </span>
+                  </div>
+                </TableCell>
                 <TableCell className="px-6 py-4 text-slate-600">{formatRut(cliente.rut_numero, cliente.rut_dv)}</TableCell>
                 <TableCell className="px-6 py-4 text-slate-600">
                   {formatTelefono(cliente.codigo_pais, cliente.telefono)}

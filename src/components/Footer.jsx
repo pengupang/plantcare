@@ -19,7 +19,7 @@ function Footer() {
         <span>·</span>
         <div className="flex items-center gap-2 text-emerald-600">
           <CircleDot className="h-2.5 w-2.5 fill-emerald-500" />
-          <span className='font-medium'>Orientado al Aprendizaje</span>
+          <span className='font-medium'>Agricultura con Conciencia</span>
         </div>
       </div>
     </footer>
