@@ -3,7 +3,7 @@ import { supabase } from "../lib/supabase"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Cloud, Sun, CloudRain, Thermometer, Droplets, Leaf, FlaskConical, Zap, 
-  TestTube, Activity, CheckCircle2, ShieldAlert, Clock, User, FileText, Info, } from "lucide-react"
+  TestTube, Activity, CheckCircle2, ShieldAlert, Clock, User, FileText, Info, AlertTriangle } from "lucide-react"
 import { MetricaCard } from "@/components/ui/MetricaCard"
 import { SearchableSelect } from "@/components/SearchableSelect"
 
@@ -20,6 +20,10 @@ function formatDia(fechaISO) {
 }
 
 function Mediciones() {
+
+  const [estadoValidacion, setEstadoValidacion] = useState("pendiente") // 'pendiente', 'validada', 'anomalia'
+  const [confirmandoAccion, setConfirmandoAccion] = useState(null) // null, 'aprobar', 'anomalia'
+
   const [clientes, setClientes] = useState([])
   const [loadingClientes, setLoadingClientes] = useState(true)
 
@@ -209,25 +213,133 @@ function Mediciones() {
         {/* Columna Izquierda Principal (2/3): Validación y Métricas */}
         <div className="lg:col-span-2 flex flex-col gap-6">
           
-          {/* Panel de Supervisión y Validación de Lectura (HU-ADM-04) */}
+          
+          {/* Panel de Supervisión y Validación de Lectura HU-ADM-04 */}
           {terrenoSeleccionado && ultimaMedicion && (
-            <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-200/60 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-700 flex items-center justify-center border border-emerald-100">
-                  <CheckCircle2 className="w-5 h-5" />
+            <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200/60 flex flex-col gap-4">
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                <div className="flex items-center gap-3">
+                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center border ${
+                    estadoValidacion === 'validada' ? 'bg-emerald-50 text-emerald-700 border-emerald-100' :
+                    estadoValidacion === 'anomalia' ? 'bg-red-50 text-red-600 border-red-100' :
+                    'bg-amber-50 text-amber-700 border-amber-100'
+                  }`}>
+                    {estadoValidacion === 'validada' ? <CheckCircle2 className="w-5 h-5" /> :
+                     estadoValidacion === 'anomalia' ? <AlertTriangle className="w-5 h-5" /> :
+                     <Clock className="w-5 h-5" />}
+                  </div>
+                  <div>
+                    <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Estado de Lectura IoT</h3>
+                    <p className="text-sm font-semibold text-slate-700 flex items-center gap-2 mt-0.5">
+                      <span className={`w-2.5 h-2.5 rounded-full ${
+                        estadoValidacion === 'validada' ? 'bg-emerald-500' :
+                        estadoValidacion === 'anomalia' ? 'bg-red-500' :
+                        'bg-amber-500'
+                      }`}></span>
+                      {estadoValidacion === 'validada' ? 'Lectura Aprobada y Validada' :
+                       estadoValidacion === 'anomalia' ? 'Marcada con Anomalía Técnica' :
+                       'Pendiente de Supervisión'}
+                    </p>
+                  </div>
                 </div>
-                <div>
-                  <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Estado de Lectura IoT</h3>
-                  {/* TODO: Conectar con la columna real de estado_validacion en Supabase */}
-                  <p className="text-sm font-semibold text-slate-700 flex items-center gap-2 mt-0.5">
-                    <span className="w-2.5 h-2.5 rounded-full bg-emerald-500"></span>
-                    Validada y Registrada Oficialmente
-                  </p>
+
+                {/* Botones de Acción Rápida */}
+                {estadoValidacion === 'pendiente' && !confirmandoAccion && (
+                  <div className="flex items-center gap-2 w-full sm:w-auto">
+                    <Button
+                      onClick={() => setConfirmandoAccion('aprobar')}
+                      size="sm"
+                      className="bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl text-xs h-9 shadow-sm"
+                    >
+                      Aprobar lectura
+                    </Button>
+                    <Button
+                      onClick={() => setConfirmandoAccion('anomalia')}
+                      size="sm"
+                      variant="outline"
+                      className="text-red-600 border-red-200 hover:bg-red-50 hover:text-red-700 rounded-xl text-xs h-9"
+                    >
+                      Marcar anomalía
+                    </Button>
+                  </div>
+                )}
+
+                {estadoValidacion !== 'pendiente' && !confirmandoAccion && (
+                  <Button
+                    onClick={() => setEstadoValidacion('pendiente')}
+                    size="sm"
+                    variant="outline"
+                    className="text-slate-600 border-slate-200 hover:bg-slate-50 rounded-xl text-xs h-9"
+                  >
+                    Cambiar estado
+                  </Button>
+                )}
+              </div>
+
+              {/* Tarjeta de Confirmación Interactiva */}
+              {confirmandoAccion && (
+                <div className={`p-4 rounded-xl border flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 animate-fadeIn ${
+                  confirmandoAccion === 'aprobar' ? 'bg-emerald-50/80 border-emerald-200' : 'bg-red-50/80 border-red-200'
+                }`}>
+                  <div className="text-xs">
+                    <p className={`font-bold ${confirmandoAccion === 'aprobar' ? 'text-emerald-900' : 'text-red-900'}`}>
+                      {confirmandoAccion === 'aprobar' 
+                        ? '¿Está seguro de confirmar la lectura?' 
+                        : '¿Está seguro de marcar esta medición como anomalía?'}
+                    </p>
+                    <p className={`mt-0.5 ${confirmandoAccion === 'aprobar' ? 'text-emerald-700' : 'text-red-700'}`}>
+                      Esta acción actualizará el registro oficial en la base de datos.
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2 w-full sm:w-auto shrink-0">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => setConfirmandoAccion(null)}
+                      className="h-8 text-xs rounded-lg bg-white border-slate-200"
+                    >
+                      Cancelar
+                    </Button>
+                    <Button
+                      size="sm"
+                      onClick={() => {
+                        const nuevoEstado = confirmandoAccion === 'aprobar' ? 'validada' : 'anomalia';
+                        
+                        /* =========================================================================
+                         * cuando esté lista la columna 'estado_validacion' 
+                         * en la tabla 'Mediciones' de Supabase, descomentar el bloque de abajo 
+                         * para guardar el estado de forma persistente.
+                         * =========================================================================
+                         * 
+                         * const actualizarSupabase = async () => {
+                         *   const { error } = await supabase
+                         *     .from("Mediciones")
+                         *     .update({ estado_validacion: nuevoEstado })
+                         *     .eq("id", ultimaMedicion.id);
+                         * 
+                         *   if (error) {
+                         *     console.error("Error al actualizar estado en Supabase:", error);
+                         *   }
+                         * };
+                         * actualizarSupabase();
+                         * ========================================================================= */
+
+                        // Actualización visual local 
+                        setEstadoValidacion(nuevoEstado);
+                        setConfirmandoAccion(null);
+                        if (ultimaMedicion) {
+                          setUltimaMedicion({ ...ultimaMedicion, estado_validacion: nuevoEstado });
+                        }
+                      }}
+                      className={`h-8 text-xs rounded-lg text-white ${
+                        confirmandoAccion === 'aprobar' ? 'bg-emerald-700 hover:bg-emerald-800' : 'bg-red-600 hover:bg-red-700'
+                      }`}
+                    >
+                      Sí, confirmar
+                    </Button>
+                  </div>
                 </div>
-              </div>
-              <div className="flex items-center gap-2 w-full sm:w-auto">
-                <span className="text-xs text-slate-400">ID Registro: #{ultimaMedicion.id ?? "N/A"}</span>
-              </div>
+              )}
             </div>
           )}
 
