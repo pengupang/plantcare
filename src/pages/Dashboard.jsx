@@ -50,7 +50,7 @@ function Dashboard() {
       setTerrenoSeleccionado(null)
       const { data, error } = await supabase
         .from("Terrenos")
-        .select("id, nombre")
+        .select("id, nombre, coordenadas_centro")
         .eq("cliente_id", clienteSeleccionado.id)
         .order("nombre")
       if (!error) setTerrenos(data || [])
