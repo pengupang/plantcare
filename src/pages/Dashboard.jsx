@@ -105,6 +105,8 @@ function Dashboard() {
     { titulo: "Humedad", campo: "humedad_suelo", unidad: "%", Icono: Droplets },
     { titulo: "Temperatura", campo: "temperatura_suelo", unidad: "°C", Icono: Thermometer },
     { titulo: "Conductividad", campo: "conductividad_electrica", unidad: "dS/m", Icono: Zap },
+    { titulo: "Humedad Ambiente", campo: "humedad_ambiente", unidad: "%", Icono: Droplets },
+    { titulo: "Temperatura Ambiente", campo: "temperatura_ambiente", unidad: "°C", Icono: Thermometer },
   ]
 
   return (

@@ -157,6 +157,8 @@ function Mediciones() {
     { titulo: "Humedad del Suelo", campo: "humedad_suelo", unidad: "%", Icono: Droplets },
     { titulo: "Temperatura del Suelo", campo: "temperatura_suelo", unidad: "°C", Icono: Thermometer },
     { titulo: "Conductividad", campo: "conductividad_electrica", unidad: "dS/m", Icono: Activity },
+    { titulo: "Humedad Ambiente", campo: "humedad_ambiente", unidad: "%", Icono: Droplets },
+    { titulo: "Temperatura Ambiente", campo: "temperatura_ambiente", unidad: "°C", Icono: Thermometer },
   ]
 
   return (
