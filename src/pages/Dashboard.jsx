@@ -180,8 +180,8 @@ function Dashboard() {
                   value={metricasConfig.find(m => m.campo === variableHistorial) ? { id: variableHistorial, nombre: metricasConfig.find(m => m.campo === variableHistorial).titulo } : null}
                   onChange={(item) => setVariableHistorial(item ? item.id : 'nitrogeno')}
                   placeholder="Seleccionar parámetro"
-                  searchPlaceholder=""
                   disabled={!terrenoSeleccionado}
+                  showSearch={false}
                 />
               </div>
             </div>
