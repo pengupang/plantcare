@@ -6,6 +6,7 @@ import { Cloud, Sun, CloudRain, Thermometer, Droplets, Leaf, FlaskConical, Zap,
   TestTube, Activity, CheckCircle2, ShieldAlert, Clock, User, FileText, Info, AlertTriangle } from "lucide-react"
 import { MetricaCard } from "@/components/ui/MetricaCard"
 import { SearchableSelect } from "@/components/SearchableSelect"
+import { generarRecomendacion } from "../lib/groq"
 
 const getWeatherIcon = (code) => {
   if (code === 0 || code === 1) return <Sun className="h-6 w-6 text-yellow-500" />
@@ -114,41 +115,24 @@ function Mediciones() {
 
   const valor = (campo) => (ultimaMedicion && ultimaMedicion[campo] != null ? ultimaMedicion[campo] : null)
 
-  const obtenerRecomendacion = async () => {
-    if (!ultimaMedicion) return
-    setLoadingIA(true)
-    setErrorIA(null)
-    setRecomendacion(null)
-    setPronosticoClima([])
+const obtenerRecomendacion = async () => {
+  if (!terrenoSeleccionado || !ultimaMedicion) return
+  setLoadingIA(true)
+  setErrorIA(null)
+  setRecomendacion(null)
+  setPronosticoClima([])
 
-    try {
-      const res = await fetch("http://localhost:3001/api/recomendacion", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          cultivo: terrenoSeleccionado.nombre,
-          nitrogeno: ultimaMedicion.nitrogeno,
-          fosforo: ultimaMedicion.fosforo,
-          potasio: ultimaMedicion.potasio,
-          ph: ultimaMedicion.ph,
-          humedad_suelo: ultimaMedicion.humedad_suelo,
-          temperatura_suelo: ultimaMedicion.temperatura_suelo,
-          observaciones_admin: observaciones,
-        }),
-      })
-      if (!res.ok) throw new Error("Error del servidor")
-      const data = await res.json()
-
-      setRecomendacion(data.recomendacion)
-      setPronosticoClima(data.clima || [])
-    } catch (e) {
-      console.error(e)
-      setErrorIA("No se pudo generar la recomendación. ¿Está corriendo el servidor y Ollama?")
-    } finally {
-      setLoadingIA(false)
-    }
+  try {
+    const { recomendacion, clima } = await generarRecomendacion(terrenoSeleccionado.id, observaciones)
+    setRecomendacion(recomendacion)
+    setPronosticoClima(clima || [])
+  } catch (e) {
+    console.error(e)
+    setErrorIA(e.message || "No se pudo generar la recomendación.")
+  } finally {
+    setLoadingIA(false)
   }
-
+}
   const metricos = [
     { titulo: "Nitrógeno (N)", campo: "nitrogeno", unidad: "kg/ha", Icono: Leaf },
     { titulo: "Fósforo (P)", campo: "fosforo", unidad: "kg/ha", Icono: FlaskConical },
