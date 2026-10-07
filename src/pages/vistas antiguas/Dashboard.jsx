@@ -1,11 +1,11 @@
 import { useEffect, useState } from "react"
-import { supabase } from "../lib/supabase"
+import { supabase } from "../../lib/supabase"
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts"
 import { Button } from "@/components/ui/button"
 import { Leaf, FlaskConical, Zap, TestTube, Droplets, Thermometer, Bot, AlertTriangle, 
   CheckCircle2, ShieldAlert, RefreshCw, Wheat, Sprout, Flower, Info } from "lucide-react"
 import { MetricaCard } from "@/components/ui/MetricaCard"
-import { SearchableSelect } from "../components/SearchableSelect"
+import { SearchableSelect } from "../../components/SearchableSelect"
 import { MapaTerreno } from "@/components/MapaTerreno"
 
 function formatFecha(fechaISO) {

@@ -1,12 +1,12 @@
 import { useEffect, useState } from "react"
-import { supabase } from "../lib/supabase"
+import { supabase } from "../../lib/supabase"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Cloud, Sun, CloudRain, Thermometer, Droplets, Leaf, FlaskConical, Zap, 
   TestTube, Activity, CheckCircle2, ShieldAlert, Clock, User, FileText, Info, AlertTriangle } from "lucide-react"
 import { MetricaCard } from "@/components/ui/MetricaCard"
 import { SearchableSelect } from "@/components/SearchableSelect"
-import { generarRecomendacion } from "../lib/groq"
+import { generarRecomendacion } from "../../lib/groq"
 
 const getWeatherIcon = (code) => {
   if (code === 0 || code === 1) return <Sun className="h-6 w-6 text-yellow-500" />
