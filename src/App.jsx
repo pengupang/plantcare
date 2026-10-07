@@ -1,29 +1,34 @@
-import { Routes, Route } from 'react-router-dom'
-import MainLayout from './layout/MainLayout'
-import ProtectedRoute from './components/ProtectedRoute'
+import { BrowserRouter ,Routes, Route , Navigate } from 'react-router-dom'
+import PortalAcceso from './pages/PortalAcceso'
 import LoginMaquinaria from './pages/LoginMaquinaria'
 import LoginLecheria from './pages/LoginLecheria'
-import Clientes from './pages/Clientes'
-import Mediciones from './pages/Mediciones'
-import Dashboard from './pages/Dashboard'
-import Mapa from './pages/Mapa'
-import PortalAcceso from './pages/PortalAcceso'
+import DashboardMaquinaria from './pages/DashboardMaquinaria'
+import DashboardLecheria from './pages/DashboardLecheria'
+import LayoutLecheria from './layout/LayoutLecheria'
+import LayoutMaquinaria from './layout/LayoutMaquinaria'
+
 
 function App() {
   return (
-    <Routes>
-      <Route path='/' element={<PortalAcceso/>} />
-      <Route path="/maquinaria/login" element={<LoginMaquinaria />} />
-      <Route path="/lecheria/login" element={<LoginLecheria />} />
-      <Route element={<ProtectedRoute />}>
-        <Route element={<MainLayout />}>
-          <Route path="/clientes" element={<Clientes />}/>
-          <Route path="/mediciones" element={<Mediciones />} />
-          <Route path="/dashboard" element={<Dashboard/>} />
-          <Route path='/mapa' element={<Mapa/>}/>
+    <BrowserRouter>
+      <Routes>
+        {/* Portal de acceso */}
+        <Route path="/" element={<PortalAcceso />} />
+        {/* Logins */}
+        <Route path="/maquinaria/login" element={<LoginMaquinaria />} />
+        <Route path="/lecheria/login" element={<LoginLecheria />} />
+        {/* paginas Maquinaria */}
+        <Route path="/maquinaria" element={<LayoutMaquinaria />}>
+          <Route index element={<Navigate to="dashboard" replace />} />
+          <Route path="dashboard" element={<DashboardMaquinaria />} />
         </Route>
-      </Route>
-    </Routes>
+        {/* Paginas de lecheria */}
+        <Route path="/lecheria" element={<LayoutLecheria />}>
+          <Route index element={<Navigate to="dashboard" replace />} />
+          <Route path="dashboard" element={<DashboardLecheria />} />
+        </Route>
+      </Routes>
+    </BrowserRouter>
   )
 }
 
