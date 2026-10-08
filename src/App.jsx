@@ -10,6 +10,8 @@ import VistaMaquinaria from './pages/VistaMaquinaria'
 import VistaProveedores from './pages/VistaProveedores'
 import VistaComidas from './pages/VistasComidas'
 import DashboardPlantCare from './pages/DashboardPlantCare'
+import VistaHistoricosGastos from './pages/HistoricoGastos'
+import VistaCalendarioAnimales from './pages/CalendarioAnimales'
 
 
 function App() {
@@ -34,6 +36,8 @@ function App() {
           <Route path='comidas' element={<VistaComidas/>}/>
           <Route path='proveedores' element={<VistaProveedores/>}/>
           <Route path='plantcare' element={<DashboardPlantCare/>}/>
+          <Route path="calendario" element={<VistaCalendarioAnimales />} />
+          <Route path="historicos" element={<VistaHistoricosGastos />} />
         </Route> 
       </Routes>
     </BrowserRouter>
