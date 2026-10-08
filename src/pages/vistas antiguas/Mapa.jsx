@@ -107,7 +107,7 @@ function Mapa() {
 
           <div className="rounded-xl overflow-hidden border border-slate-200/80 shadow-inner" style={{ height: '480px' }}>
             <MapContainer
-              center={[-33.4569, -70.6483]}
+              center={[-40.5724, -73.1353]}
               zoom={13}
               style={{ height: '100%', width: '100%' }}
             >

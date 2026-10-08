@@ -54,6 +54,10 @@ function Clientes() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [busqueda, setBusqueda] = useState("")
+  // Estados para las ventanas emergentes (modales)
+  const [modalDetalles, setModalDetalles] = useState(null)
+  const [modalEditar, setModalEditar] = useState(null)
+  const [modalDeshabilitar, setModalDeshabilitar] = useState(null)
 
   const [open, setOpen] = useState(false)
   const [form, setForm] = useState({ nombre: "", rutNumero: "", telefono: "+569" })
@@ -208,28 +212,33 @@ function Clientes() {
                   {formatTelefono(cliente.codigo_pais, cliente.telefono)}
                 </TableCell>
                 <TableCell className="px-6 py-4 text-right">
-                  <div className="flex items-center justify-end gap-1">
-                    <Button 
-                      variant="ghost" 
+                  <div className="flex items-center gap-3">
+                    {/* Botón Ver Detalles */}
+                    <button 
+                      onClick={() => setModalDetalles(cliente)}
+                      className="text-slate-400 hover:text-slate-600 transition-colors"
                       title="Ver detalles"
-                      className="text-slate-600 hover:bg-slate-100 hover:text-slate-900 rounded-xl h-9 w-9 p-0"
                     >
-                      <Eye className="h-4 w-4" />
-                    </Button>
-                    <Button 
-                      variant="ghost" 
+                      <Eye className="w-4 h-4" />
+                    </button>
+
+                    {/* Botón Editar  */}
+                    <button 
+                      onClick={() => setModalEditar(cliente)}
+                      className="text-emerald-600 hover:text-emerald-700 transition-colors"
                       title="Editar cliente"
-                      className="text-emerald-700 hover:bg-emerald-50 hover:text-emerald-800 rounded-xl h-9 w-9 p-0"
                     >
-                      <Pencil className="h-4 w-4" />
-                    </Button>
-                    <Button 
-                      variant="ghost" 
-                      title="Desactivar cliente"
-                      className="text-red-600 hover:bg-red-50 hover:text-red-700 rounded-xl h-9 w-9 p-0"
+                      <Pencil className="w-4 h-4" />
+                    </button>
+
+                    {/* Botón Deshabilitar */}
+                    <button 
+                      onClick={() => setModalDeshabilitar(cliente)}
+                      className="text-red-400 hover:text-red-600 transition-colors"
+                      title="Deshabilitar cliente"
                     >
-                      <Ban className="h-4 w-4" />
-                    </Button>
+                      <Ban className="w-4 h-4" />
+                    </button>
                   </div>
                 </TableCell>
               </TableRow>
@@ -291,6 +300,110 @@ function Clientes() {
           </form>
         </DialogContent>
       </Dialog>
+
+    {/* 1. MODAL: VER DETALLES */}
+      {modalDetalles && (
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl p-6 w-full max-w-md shadow-xl border border-slate-200 animate-fadeIn">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100 mb-4">
+              <h3 className="text-base font-bold text-slate-800">Detalles del Cliente</h3>
+              <button onClick={() => setModalDetalles(null)} className="text-slate-400 hover:text-slate-600 font-bold">✕</button>
+            </div>
+            <div className="space-y-3 text-xs">
+              <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
+                <span className="text-slate-400 block font-medium uppercase tracking-wider">Nombre Completo</span>
+                <span className="font-bold text-slate-800 text-sm">{modalDetalles.nombre}</span>
+              </div>
+              <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
+                <span className="text-slate-400 block font-medium uppercase tracking-wider">RUT</span>
+                <span className="font-semibold text-slate-700">{modalDetalles.rut || "Sin RUT registrado"}</span>
+              </div>
+              <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
+                <span className="text-slate-400 block font-medium uppercase tracking-wider">Teléfono de Contacto</span>
+                <span className="font-semibold text-slate-700">{modalDetalles.telefono || "Sin teléfono"}</span>
+              </div>
+            </div>
+            <div className="mt-6 flex justify-end">
+              <Button onClick={() => setModalDetalles(null)} className="bg-slate-800 hover:bg-slate-900 text-white rounded-xl text-xs h-9 px-4">
+                Cerrar
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 2. MODAL: EDITAR CLIENTE (Prueba visual) */}
+      {modalEditar && (
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl p-6 w-full max-w-md shadow-xl border border-slate-200 animate-fadeIn">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100 mb-4">
+              <h3 className="text-base font-bold text-slate-800">Editar Cliente (Modo Prueba)</h3>
+              <button onClick={() => setModalEditar(null)} className="text-slate-400 hover:text-slate-600 font-bold">✕</button>
+            </div>
+            <div className="space-y-4 text-xs">
+              <div>
+                <label className="font-bold text-slate-600 block mb-1">NOMBRE</label>
+                <input 
+                  type="text" 
+                  defaultValue={modalEditar.nombre} 
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 font-medium focus:outline-none focus:border-emerald-600"
+                />
+              </div>
+              <div>
+                <label className="font-bold text-slate-600 block mb-1">RUT</label>
+                <input 
+                  type="text" 
+                  defaultValue={modalEditar.rut} 
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 font-medium focus:outline-none focus:border-emerald-600"
+                />
+              </div>
+              <div>
+                <label className="font-bold text-slate-600 block mb-1">TELÉFONO</label>
+                <input 
+                  type="text" 
+                  defaultValue={modalEditar.telefono} 
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 font-medium focus:outline-none focus:border-emerald-600"
+                />
+              </div>
+            </div>
+            <div className="mt-6 flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setModalEditar(null)} className="rounded-xl text-xs h-9">
+                Cancelar
+              </Button>
+              <Button onClick={() => { alert("Cambios guardados en modo de prueba local."); setModalEditar(null); }} className="bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl text-xs h-9">
+                Guardar cambios
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 3. MODAL: DESHABILITAR CLIENTE (Prueba visual) */}
+      {modalDeshabilitar && (
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl p-6 w-full max-w-md shadow-xl border border-slate-200 animate-fadeIn">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100 mb-4">
+              <h3 className="text-base font-bold text-red-600 flex items-center gap-2"> Deshabilitar Cliente</h3>
+              <button onClick={() => setModalDeshabilitar(null)} className="text-slate-400 hover:text-slate-600 font-bold">✕</button>
+            </div>
+            <p className="text-xs text-slate-600 leading-relaxed mb-4">
+              ¿Estás seguro de que deseas deshabilitar al cliente <strong className="text-slate-800">{modalDeshabilitar.nombre}</strong>? 
+              <br/><span className="text-[11px] text-slate-400 mt-1 block">*(Nota: Como la base de datos aún no cuenta con la columna de estado, esta acción es solo una simulación visual por ahora).*</span>
+            </p>
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setModalDeshabilitar(null)} className="rounded-xl text-xs h-9">
+                Cancelar
+              </Button>
+              <Button onClick={() => { alert(`Acción simulada: Cliente ${modalDeshabilitar.nombre} deshabilitado localmente.`); setModalDeshabilitar(null); }} className="bg-red-600 hover:bg-red-700 text-white rounded-xl text-xs h-9">
+                Sí, deshabilitar
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+
+
     </div>
   )
 }

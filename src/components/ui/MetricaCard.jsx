@@ -72,6 +72,11 @@ export function MetricaCard({ titulo, valor, unidad, campo, Icono }) {
   const estado = evaluarEstado(campo, valor)
   const estilo = ESTILOS[estado]
 
+  const formatearValor = (val) => {
+    if (val == null || isNaN(val)) return "n/a"
+    return Number(val).toFixed(0)
+  }
+
   return (
     <Card className={`border-2 rounded-2xl p-4 flex flex-col gap-4 bg-white transition-all duration-200 hover:-translate-y-1 hover:shadow-md ${estilo.card}`}>
       <div className="flex justify-between items-start">
@@ -85,7 +90,7 @@ export function MetricaCard({ titulo, valor, unidad, campo, Icono }) {
       </div>
 
       <div className="flex items-baseline gap-1">
-        <span className={`text-4xl font-bold ${estilo.valor}`}>{valor ?? "n/a"}</span>
+        <span className={`text-4xl font-bold ${estilo.valor}`}>{formatearValor(valor)}</span>
         <span className="text-sm font-medium text-gray-500">{unidad}</span>
       </div>
 

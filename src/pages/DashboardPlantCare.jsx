@@ -26,6 +26,8 @@ function DashboardPlantCare() {
   const [historial, setHistorial] = useState([])
   const [loadingMediciones, setLoadingMediciones] = useState(false)
 
+  const [variableHistorial, setVariableHistorial] = useState("nitrogeno")
+
   useEffect(() => {
     const cargarClientes = async () => {
       setLoadingClientes(true)
@@ -47,7 +49,7 @@ function DashboardPlantCare() {
       setTerrenoSeleccionado(null)
       const { data, error } = await supabase
         .from("Terrenos")
-        .select("id, nombre")
+        .select("id, nombre, coordenadas_centro")
         .eq("cliente_id", clienteSeleccionado.id)
         .order("nombre")
       if (!error) setTerrenos(data || [])
@@ -74,23 +76,25 @@ function DashboardPlantCare() {
         .maybeSingle()
       setUltimaMedicion(ultima ?? null)
 
+      // Modificado para consultar dinámicamente la variable elegida
       const { data: serie } = await supabase
         .from("Mediciones")
-        .select("created_at, nitrogeno")
+        .select(`created_at, ${variableHistorial}`)
         .eq("terreno_id", terrenoSeleccionado.id)
         .order("created_at", { ascending: true })
         .limit(20)
+      
       setHistorial(
         (serie ?? []).map((m) => ({
           fecha: formatFecha(m.created_at),
-          valor: m.nitrogeno,
+          valor: m[variableHistorial],
         }))
       )
 
       setLoadingMediciones(false)
     }
     cargarMediciones()
-  }, [terrenoSeleccionado])
+  }, [terrenoSeleccionado, variableHistorial]) // Añadido variableHistorial aquí para que recargue al cambiar
 
   const metricasConfig = [
     { titulo: "Nitrógeno (N)", campo: "nitrogeno", unidad: "kg/ha", Icono: Leaf },
@@ -99,7 +103,9 @@ function DashboardPlantCare() {
     { titulo: "pH", campo: "ph", unidad: "pH", Icono: TestTube },
     { titulo: "Humedad", campo: "humedad_suelo", unidad: "%", Icono: Droplets },
     { titulo: "Temperatura", campo: "temperatura_suelo", unidad: "°C", Icono: Thermometer },
-    { titulo: "Conductividad", campo: "conductividad_electrica", unidad: "dS/m", Icono: Zap },
+    { titulo: "Conductividad", campo: "ec", unidad: "dS/m", Icono: Zap },
+    { titulo: "Humedad Ambiente", campo: "humedad_ambiente", unidad: "%", Icono: Droplets },
+    { titulo: "Temperatura Ambiente", campo: "temperatura_ambiente", unidad: "°C", Icono: Thermometer },
   ]
 
   return (
@@ -163,8 +169,24 @@ function DashboardPlantCare() {
           </div>
 
           {/* Gráfico de Historial */}
+          {/* Gráfico de Historial con Selector de Parámetro */}
           <div className="rounded-2xl bg-white p-6 shadow-sm border border-slate-200/60">
-            <h2 className="mb-4 text-lg font-bold text-slate-800">Historial de mediciones (Nitrógeno)</h2>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+              <h2 className="text-base font-bold text-slate-800">Historial de Mediciones</h2>
+              
+              {/* Selector de Parámetro con el mismo diseño y desactivado si no hay terreno */}
+              <div className="w-full sm:w-64">
+                <SearchableSelect
+                  items={metricasConfig.map(m => ({ id: m.campo, nombre: m.titulo }))}
+                  value={metricasConfig.find(m => m.campo === variableHistorial) ? { id: variableHistorial, nombre: metricasConfig.find(m => m.campo === variableHistorial).titulo } : null}
+                  onChange={(item) => setVariableHistorial(item ? item.id : 'nitrogeno')}
+                  placeholder="Seleccionar parámetro"
+                  disabled={!terrenoSeleccionado}
+                  showSearch={false}
+                />
+              </div>
+            </div>
+
             {!terrenoSeleccionado && <p className="text-gray-500 text-sm">Seleccioná un cliente y un terreno para ver su historial.</p>}
             {terrenoSeleccionado && loadingMediciones && <p className="text-gray-500 text-sm">Cargando...</p>}
             {terrenoSeleccionado && !loadingMediciones && historial.length === 0 && (
