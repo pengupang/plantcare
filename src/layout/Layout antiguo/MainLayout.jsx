@@ -1,8 +1,8 @@
 import { useState } from 'react'
 import { Menu } from 'lucide-react'
 import { Outlet } from 'react-router-dom'
-import Sidebar from './Sidebar'
-import WeatherWidget from '../components/WeatherWidget'
+import Sidebar from '../Sidebar'
+import WeatherWidget from '../../components/WeatherWidget'
 import Footer from '@/components/Footer'    
 
 function MainLayout() {
