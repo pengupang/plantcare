@@ -17,7 +17,7 @@ import {
 
 const navItems = [
   { label: "Dashboard",         icon: BarChart2,    path: "/maquinaria/dashboard" },
-  { label: "Maquinaria",        icon: Wrench,       path: "/maquinaria/maquinaria" },
+  { label: "Maquinaria",        icon: Wrench,       path: "/maquinaria/maquinas" },
   { label: "Arriendos",         icon: FileText,     path: "/maquinaria/arriendos" },
   { label: "Facturación",       icon: FileText,     path: "/maquinaria/facturacion" },
   { label: "Clientes",          icon: Users,        path: "/maquinaria/clientes" },

@@ -1,11 +1,11 @@
 import { useEffect, useState } from "react"
-import { supabase } from "../../lib/supabase"
+import { supabase } from "@/lib/supabase"
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts"
 import { Button } from "@/components/ui/button"
 import { Leaf, FlaskConical, Zap, TestTube, Droplets, Thermometer, Bot, AlertTriangle, 
   CheckCircle2, ShieldAlert, RefreshCw, Wheat, Sprout, Flower, Info } from "lucide-react"
 import { MetricaCard } from "@/components/ui/MetricaCard"
-import { SearchableSelect } from "../../components/SearchableSelect"
+import { SearchableSelect } from "@/components/SearchableSelect"
 import { MapaTerreno } from "@/components/MapaTerreno"
 
 function formatFecha(fechaISO) {
@@ -13,7 +13,7 @@ function formatFecha(fechaISO) {
   return d.toLocaleDateString("es-CL", { day: "2-digit", month: "2-digit" })
 }
 
-function Dashboard() {
+function DashboardPlantCare() {
   const [clientes, setClientes] = useState([])
   const [loadingClientes, setLoadingClientes] = useState(true)
 
@@ -304,4 +304,4 @@ function Dashboard() {
   )
 }
 
-export default Dashboard
+export default DashboardPlantCare

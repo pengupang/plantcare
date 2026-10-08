@@ -6,6 +6,10 @@ import DashboardMaquinaria from './pages/DashboardMaquinaria'
 import DashboardLecheria from './pages/DashboardLecheria'
 import LayoutLecheria from './layout/LayoutLecheria'
 import LayoutMaquinaria from './layout/LayoutMaquinaria'
+import VistaMaquinaria from './pages/VistaMaquinaria'
+import VistaProveedores from './pages/VistaProveedores'
+import VistaComidas from './pages/VistasComidas'
+import DashboardPlantCare from './pages/DashboardPlantCare'
 
 
 function App() {
@@ -21,12 +25,16 @@ function App() {
         <Route path="/maquinaria" element={<LayoutMaquinaria />}>
           <Route index element={<Navigate to="dashboard" replace />} />
           <Route path="dashboard" element={<DashboardMaquinaria />} />
+          <Route path='maquinas' element={<VistaMaquinaria/>}/>
         </Route>
         {/* Paginas de lecheria */}
         <Route path="/lecheria" element={<LayoutLecheria />}>
           <Route index element={<Navigate to="dashboard" replace />} />
           <Route path="dashboard" element={<DashboardLecheria />} />
-        </Route>
+          <Route path='comidas' element={<VistaComidas/>}/>
+          <Route path='proveedores' element={<VistaProveedores/>}/>
+          <Route path='plantcare' element={<DashboardPlantCare/>}/>
+        </Route> 
       </Routes>
     </BrowserRouter>
   )
