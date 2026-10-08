@@ -12,7 +12,12 @@ import VistaComidas from './pages/VistasComidas'
 import DashboardPlantCare from './pages/DashboardPlantCare'
 import VistaHistoricosGastos from './pages/HistoricoGastos'
 import VistaCalendarioAnimales from './pages/CalendarioAnimales'
-
+import VistaClientes from './pages/Clientes'
+import VistaServicios from './pages/Servicios'
+import VistaArriendos from './pages/Arriendos'
+import VistaFacturacion from './pages/Facturacion'
+import VistaCalendarioArriendo from './pages/CalendarioMaquinas'
+import VistaHistoricosMaquinaria from './pages/HistoricoMaquinaria'
 
 function App() {
   return (
@@ -28,6 +33,12 @@ function App() {
           <Route index element={<Navigate to="dashboard" replace />} />
           <Route path="dashboard" element={<DashboardMaquinaria />} />
           <Route path='maquinas' element={<VistaMaquinaria/>}/>
+          <Route path="clientes" element={<VistaClientes />} />
+          <Route path="servicios" element={<VistaServicios />} />
+          <Route path="arriendos" element={<VistaArriendos />} />
+          <Route path="facturacion" element={<VistaFacturacion />} />
+          <Route path="calendario" element={<VistaCalendarioArriendo />} />
+          <Route path="historicos" element={<VistaHistoricosMaquinaria />} />
         </Route>
         {/* Paginas de lecheria */}
         <Route path="/lecheria" element={<LayoutLecheria />}>
