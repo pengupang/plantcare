@@ -79,7 +79,7 @@ async function pedirRecomendacionAGroq({ medicion, nombreCultivo, referenciaINIA
 - Potasio: ${valor("potasio")}
 - pH: ${valor("ph")}
 - Humedad del suelo: ${valor("humedad_suelo", "%")}
-- Conductividad eléctrica: ${valor("conductividad_electrica")}
+- Conductividad eléctrica: ${valor("ec")}
 `
 
   if (nombreCultivo) prompt += `\nCultivo del terreno: ${nombreCultivo}.`

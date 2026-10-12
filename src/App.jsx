@@ -1,4 +1,5 @@
 import { BrowserRouter ,Routes, Route , Navigate } from 'react-router-dom'
+import ProtectedRoute from './components/ProtectedRoute'
 import PortalAcceso from './pages/PortalAcceso'
 import LoginMaquinaria from './pages/LoginMaquinaria'
 import LoginLecheria from './pages/LoginLecheria'
@@ -29,27 +30,31 @@ function App() {
         <Route path="/maquinaria/login" element={<LoginMaquinaria />} />
         <Route path="/lecheria/login" element={<LoginLecheria />} />
         {/* paginas Maquinaria */}
-        <Route path="/maquinaria" element={<LayoutMaquinaria />}>
-          <Route index element={<Navigate to="dashboard" replace />} />
-          <Route path="dashboard" element={<DashboardMaquinaria />} />
-          <Route path='maquinas' element={<VistaMaquinaria/>}/>
-          <Route path="clientes" element={<VistaClientes />} />
-          <Route path="servicios" element={<VistaServicios />} />
-          <Route path="arriendos" element={<VistaArriendos />} />
-          <Route path="facturacion" element={<VistaFacturacion />} />
-          <Route path="calendario" element={<VistaCalendarioArriendo />} />
-          <Route path="historicos" element={<VistaHistoricosMaquinaria />} />
+        <Route element={<ProtectedRoute modulo="maquinaria" />}>
+          <Route path="/maquinaria" element={<LayoutMaquinaria />}>
+            <Route index element={<Navigate to="dashboard" replace />} />
+            <Route path="dashboard" element={<DashboardMaquinaria />} />
+            <Route path='maquinas' element={<VistaMaquinaria/>}/>
+            <Route path="clientes" element={<VistaClientes />} />
+            <Route path="servicios" element={<VistaServicios />} />
+            <Route path="arriendos" element={<VistaArriendos />} />
+            <Route path="facturacion" element={<VistaFacturacion />} />
+            <Route path="calendario" element={<VistaCalendarioArriendo />} />
+            <Route path="historicos" element={<VistaHistoricosMaquinaria />} />
+          </Route>
         </Route>
         {/* Paginas de lecheria */}
-        <Route path="/lecheria" element={<LayoutLecheria />}>
-          <Route index element={<Navigate to="dashboard" replace />} />
-          <Route path="dashboard" element={<DashboardLecheria />} />
-          <Route path='comidas' element={<VistaComidas/>}/>
-          <Route path='proveedores' element={<VistaProveedores/>}/>
-          <Route path='plantcare' element={<DashboardPlantCare/>}/>
-          <Route path="calendario" element={<VistaCalendarioAnimales />} />
-          <Route path="historicos" element={<VistaHistoricosGastos />} />
-        </Route> 
+        <Route element={<ProtectedRoute modulo="lecheria" />}>
+          <Route path="/lecheria" element={<LayoutLecheria />}>
+            <Route index element={<Navigate to="dashboard" replace />} />
+            <Route path="dashboard" element={<DashboardLecheria />} />
+            <Route path='comidas' element={<VistaComidas/>}/>
+            <Route path='proveedores' element={<VistaProveedores/>}/>
+            <Route path='plantcare' element={<DashboardPlantCare/>}/>
+            <Route path="calendario" element={<VistaCalendarioAnimales />} />
+            <Route path="historicos" element={<VistaHistoricosGastos />} />
+          </Route>
+        </Route>
       </Routes>
     </BrowserRouter>
   )

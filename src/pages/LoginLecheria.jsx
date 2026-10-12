@@ -1,7 +1,7 @@
 // LoginLecheria.jsx
 import { useState } from "react"
 import { useNavigate } from "react-router-dom"
-import { supabase } from "../lib/supabase"
+import { iniciarSesion, formatearRut } from "../lib/auth"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { MilkOff } from "lucide-react"
@@ -18,31 +18,10 @@ function LoginLecheria() {
     setLoading(true)
     setError(null)
 
-    // Buscar email por RUT
-    const { data, error: rutError } = await supabase
-      .from("usuarios_lecheria")
-      .select("email")
-      .eq("rut", rut)
-      .single()
-      console.log("RUT ingresado:", rut)
-      console.log("RUT length:", rut.length)
+    const { error: errorLogin } = await iniciarSesion("lecheria", rut, password)
 
-    if (rutError || !data) {
-      setError("RUT no encontrado")
-      setLoading(false)
-      return
-    }
-
-    // Login con Supabase Auth
-    const { error: authError } = await supabase.auth.signInWithPassword({
-      email: data.email,
-      password,
-    })
-    console.log("data:", data)
-    console.log("rutError:", rutError)
-
-    if (authError) {
-      setError("Contraseña incorrecta")
+    if (errorLogin) {
+      setError(errorLogin)
       setLoading(false)
       return
     }
@@ -73,7 +52,7 @@ function LoginLecheria() {
             </label>
             <Input
               type="text"
-              placeholder="12345678-9"
+              placeholder="Ingrese RUT"
               className="h-11 rounded-xl border border-slate-200 bg-slate-50/50 p-3 focus:bg-white transition-colors"
               value={rut}
               onChange={(e) => setRut(e.target.value)}
@@ -90,7 +69,7 @@ function LoginLecheria() {
               placeholder="••••••••"
               className="h-11 rounded-xl border border-slate-200 bg-slate-50/50 p-3 focus:bg-white transition-colors"
               value={password}
-              onChange={(e) => setPassword(e.target.value)}
+              onChange={(e) => setRut(formatearRut(e.target.value))}
               required
             />
           </div>
