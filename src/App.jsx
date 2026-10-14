@@ -1,8 +1,7 @@
 import { BrowserRouter ,Routes, Route , Navigate } from 'react-router-dom'
-import ProtectedRoute from './components/ProtectedRoute'
 import PortalAcceso from './pages/PortalAcceso'
-import LoginMaquinaria from './pages/LoginMaquinaria'
-import LoginLecheria from './pages/LoginLecheria'
+import Login from './pages/Login'
+import RequireRole from './components/RequireRole'
 import DashboardMaquinaria from './pages/DashboardMaquinaria'
 import DashboardLecheria from './pages/DashboardLecheria'
 import LayoutLecheria from './layout/LayoutLecheria'
@@ -24,17 +23,20 @@ function App() {
   return (
     <BrowserRouter>
       <Routes>
-        {/* Portal de acceso */}
-        <Route path="/" element={<PortalAcceso />} />
-        {/* Logins */}
-        <Route path="/maquinaria/login" element={<LoginMaquinaria />} />
-        <Route path="/lecheria/login" element={<LoginLecheria />} />
-        {/* paginas Maquinaria */}
-        <Route element={<ProtectedRoute modulo="maquinaria" />}>
+        {/* Login único */}
+        <Route path="/" element={<Login />} />
+
+        {/* Selector de área (solo admin) */}
+        <Route element={<RequireRole allow={["admin"]} />}>
+          <Route path="/portal" element={<PortalAcceso />} />
+        </Route>
+
+        {/* Páginas Maquinaria: admin y maquinaria */}
+        <Route element={<RequireRole allow={["admin", "maquinaria"]} />}>
           <Route path="/maquinaria" element={<LayoutMaquinaria />}>
             <Route index element={<Navigate to="dashboard" replace />} />
             <Route path="dashboard" element={<DashboardMaquinaria />} />
-            <Route path='maquinas' element={<VistaMaquinaria/>}/>
+            <Route path="maquinas" element={<VistaMaquinaria />} />
             <Route path="clientes" element={<VistaClientes />} />
             <Route path="servicios" element={<VistaServicios />} />
             <Route path="arriendos" element={<VistaArriendos />} />
@@ -43,18 +45,22 @@ function App() {
             <Route path="historicos" element={<VistaHistoricosMaquinaria />} />
           </Route>
         </Route>
-        {/* Paginas de lecheria */}
-        <Route element={<ProtectedRoute modulo="lecheria" />}>
+
+        {/* Páginas Lechería: admin y lecheria */}
+        <Route element={<RequireRole allow={["admin", "lecheria"]} />}>
           <Route path="/lecheria" element={<LayoutLecheria />}>
             <Route index element={<Navigate to="dashboard" replace />} />
             <Route path="dashboard" element={<DashboardLecheria />} />
-            <Route path='comidas' element={<VistaComidas/>}/>
-            <Route path='proveedores' element={<VistaProveedores/>}/>
-            <Route path='plantcare' element={<DashboardPlantCare/>}/>
+            <Route path="comidas" element={<VistaComidas />} />
+            <Route path="proveedores" element={<VistaProveedores />} />
+            <Route path="plantcare" element={<DashboardPlantCare />} />
             <Route path="calendario" element={<VistaCalendarioAnimales />} />
             <Route path="historicos" element={<VistaHistoricosGastos />} />
           </Route>
         </Route>
+
+        {/* Cualquier otra ruta */}
+        <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </BrowserRouter>
   )

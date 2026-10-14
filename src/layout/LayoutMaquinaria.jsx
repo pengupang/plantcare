@@ -1,6 +1,7 @@
 import { useState } from "react"
 import { Outlet, useNavigate, useLocation } from "react-router-dom"
 import { supabase } from "../lib/supabase"
+import { useAuth } from "../context/AuthContext"
 import {
   Wrench,
   FileText,
@@ -13,6 +14,7 @@ import {
   ChevronRight,
   Menu,
   X,
+  ArrowLeftRight,
 } from "lucide-react"
 
 const navItems = [
@@ -26,7 +28,8 @@ const navItems = [
   { label: "Datos Históricos",  icon: BarChart2,    path: "/maquinaria/historicos" },
 ]
 
-export default function LayoutMaquinaria({ usuario }) {
+export default function LayoutMaquinaria() {
+  const { perfil } = useAuth()
   const navigate = useNavigate()
   const location = useLocation()
   const [collapsed, setCollapsed] = useState(false)
@@ -91,7 +94,13 @@ export default function LayoutMaquinaria({ usuario }) {
             {navItems.find(i => i.path === location.pathname)?.label ?? "Dashboard"}
           </h2>
           <div style={styles.headerRight}>
-            <span style={styles.userName}>{usuario ?? "Usuario"}</span>
+            <span style={styles.userName}>{perfil?.email ?? "Usuario"}</span>
+            {perfil?.rol === "admin" && (
+              <button onClick={() => navigate("/portal")} style={styles.logoutBtn} title="Cambiar de área">
+                <ArrowLeftRight size={16} />
+                <span>Cambiar de área</span>
+              </button>
+            )}
             <button onClick={handleLogout} style={styles.logoutBtn} title="Cerrar sesión">
               <LogOut size={16} />
               <span>Salir</span>

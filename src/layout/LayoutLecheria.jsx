@@ -1,6 +1,7 @@
 import { useState } from "react"
 import { Outlet, useNavigate, useLocation } from "react-router-dom"
 import { supabase } from "../lib/supabase"
+import { useAuth } from "../context/AuthContext"
 import {
   Leaf,
   ShoppingBasket,
@@ -12,6 +13,7 @@ import {
   LogOut,
   ChevronRight,
   Menu,
+  ArrowLeftRight,
 } from "lucide-react"
 
 const navItems = [
@@ -23,7 +25,8 @@ const navItems = [
   { label: "Gastos Históricos",   icon: PieChart,        path: "/lecheria/historicos" },
 ]
 
-export default function LayoutLecheria({ usuario }) {
+export default function LayoutLecheria() {
+  const { perfil } = useAuth()
   const navigate = useNavigate()
   const location = useLocation()
   const [collapsed, setCollapsed] = useState(false)
@@ -88,7 +91,13 @@ export default function LayoutLecheria({ usuario }) {
             {navItems.find(i => i.path === location.pathname)?.label ?? "Dashboard"}
           </h2>
           <div style={styles.headerRight}>
-            <span style={styles.userName}>{usuario ?? "Usuario"}</span>
+            <span style={styles.userName}>{perfil?.email ?? "Usuario"}</span>
+            {perfil?.rol === "admin" && (
+              <button onClick={() => navigate("/portal")} style={styles.logoutBtn} title="Cambiar de área">
+                <ArrowLeftRight size={16} />
+                <span>Cambiar de área</span>
+              </button>
+            )}
             <button onClick={handleLogout} style={styles.logoutBtn} title="Cerrar sesión">
               <LogOut size={16} />
               <span>Salir</span>

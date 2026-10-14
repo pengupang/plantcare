@@ -1,14 +1,32 @@
 import { useNavigate } from "react-router-dom";
+import { supabase } from "../lib/supabase";
 
 export default function PortalAcceso() {
   const navigate = useNavigate();
 
+  const cerrarSesion = async () => {
+    await supabase.auth.signOut();
+    navigate("/", { replace: true });
+  };
+
   return (
     <div style={styles.container}>
+      <button
+        onClick={cerrarSesion}
+        style={{
+          position: "absolute", top: 16, right: 16, zIndex: 20,
+          padding: "8px 16px", background: "rgba(0,0,0,0.35)", color: "#fff",
+          border: "1px solid rgba(255,255,255,0.25)", borderRadius: 6,
+          fontSize: 13, cursor: "pointer",
+        }}
+      >
+        Cerrar sesión
+      </button>
+
       {/* Lado izquierdo — Arriendo de Maquinaria */}
       <div
         style={styles.panelLeft}
-        onClick={() => navigate("/maquinaria/login")}
+        onClick={() => navigate("/maquinaria/dashboard")}
         onMouseEnter={e => {
           e.currentTarget.style.flex = "0.6";
         }}
@@ -37,7 +55,7 @@ export default function PortalAcceso() {
       {/* Lado derecho — Lechería */}
       <div
         style={styles.panelRight}
-        onClick={() => navigate("/lecheria/login")}
+        onClick={() => navigate("/lecheria/dashboard")}
         onMouseEnter={e => {
           e.currentTarget.style.flex = "0.6";
         }}
@@ -49,7 +67,7 @@ export default function PortalAcceso() {
           <span style={styles.eyebrowRight}>Inventario y campo</span>
           <h1 style={styles.titleRight}>Lechería</h1>
           <p style={styles.desc}>
-            Inventario, producción y monitoreo de suelo
+            Inventario, rebaño y monitoreo de suelo
           </p>
           <button style={styles.btnRight}>Ingresar</button>
         </div>
