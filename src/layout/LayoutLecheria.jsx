@@ -14,6 +14,8 @@ import {
   ChevronRight,
   Menu,
   ArrowLeftRight,
+  PawPrint, 
+  Stethoscope,
 } from "lucide-react"
 
 const navItems = [
@@ -23,6 +25,8 @@ const navItems = [
   { label: "Proveedores",         icon: Truck,           path: "/lecheria/proveedores" },
   { label: "Calendario Animales", icon: CalendarDays,    path: "/lecheria/calendario" },
   { label: "Gastos Históricos",   icon: PieChart,        path: "/lecheria/historicos" },
+  { label: "Rebaño y Potreros", icon: PawPrint,    path: "/lecheria/rebano" },
+  { label: "Sanidad y Manejo",  icon: Stethoscope, path: "/lecheria/sanidad" },
 ]
 
 export default function LayoutLecheria() {

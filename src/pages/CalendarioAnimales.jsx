@@ -1,35 +1,42 @@
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { Plus, X, ChevronLeft, ChevronRight } from "lucide-react"
+import { animales as animalesApi, sanidad as sanidadApi, etiquetaAnimal } from "../services/lecheria"
+import { TIPOS_EVENTO } from "./estilosLecheria"
 
-const tiposEvento = {
-  "Control veterinario": { color: "#3B82F6", bg: "#DBEAFE" },
-  "Parto":               { color: "#10B981", bg: "#D1FAE5" },
-  "Inseminación":        { color: "#8B5CF6", bg: "#EDE9FE" },
-  "Vacunación":          { color: "#F59E0B", bg: "#FEF3C7" },
-}
-
-const animales = ["Vaca 01", "Vaca 02", "Vaca 03", "Vaca 04", "Vaca 05", "Vaca 06"]
+const tiposEvento = TIPOS_EVENTO
 
 const today = new Date()
-
-const initialEventos = [
-  { id: 1, animal: "Vaca 01", tipo: "Control veterinario", fecha: new Date(today.getFullYear(), today.getMonth(), 5), nota: "Revisión general" },
-  { id: 2, animal: "Vaca 03", tipo: "Parto", fecha: new Date(today.getFullYear(), today.getMonth(), 8), nota: "Parto esperado" },
-  { id: 3, animal: "Vaca 02", tipo: "Inseminación", fecha: new Date(today.getFullYear(), today.getMonth(), 12), nota: "" },
-  { id: 4, animal: "Vaca 05", tipo: "Vacunación", fecha: new Date(today.getFullYear(), today.getMonth(), 15), nota: "Triple bovina" },
-  { id: 5, animal: "Vaca 04", tipo: "Control veterinario", fecha: new Date(today.getFullYear(), today.getMonth(), 20), nota: "Control prenatal" },
-  { id: 6, animal: "Vaca 01", tipo: "Inseminación", fecha: new Date(today.getFullYear(), today.getMonth(), 25), nota: "" },
-]
-
-const emptyEvento = { animal: animales[0], tipo: Object.keys(tiposEvento)[0], fecha: "", nota: "" }
 
 const DIAS = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"]
 const MESES = ["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"]
 
 export default function VistaCalendarioAnimales() {
-  const [eventos, setEventos] = useState(initialEventos)
+  const [eventos, setEventos] = useState([])
+  const [animales, setAnimales] = useState([])
   const [showAdd, setShowAdd] = useState(false)
-  const [newEvento, setNewEvento] = useState(emptyEvento)
+  const [newEvento, setNewEvento] = useState({ animal_id: "", tipo: Object.keys(tiposEvento)[0], fecha: "", nota: "" })
+  const [error, setError] = useState(null)
+
+  // Los eventos salen de los registros de Sanidad (misma fuente de datos)
+  const cargar = async () => {
+    try {
+      const [a, reg] = await Promise.all([animalesApi.listar(), sanidadApi.listar()])
+      setAnimales(a)
+      setEventos(reg.map(r => {
+        const [y, m, d] = r.fecha.split("-").map(Number)
+        return {
+          id: r.id,
+          animal: etiquetaAnimal(a.find(x => x.id === r.animal_id)),
+          tipo: r.tipo,
+          fecha: new Date(y, m - 1, d),
+          nota: r.nota || r.producto || "",
+        }
+      }))
+    } catch (e) {
+      setError(e.message)
+    }
+  }
+  useEffect(() => { cargar() }, [])
   const [viewDate, setViewDate] = useState(new Date(today.getFullYear(), today.getMonth(), 1))
   const [selectedDay, setSelectedDay] = useState(null)
 
@@ -45,14 +52,32 @@ export default function VistaCalendarioAnimales() {
     e.fecha.getDate() === day
   )
 
-  const addEvento = () => {
-    const [y, m, d] = newEvento.fecha.split("-").map(Number)
-    setEventos([...eventos, { ...newEvento, id: Date.now(), fecha: new Date(y, m - 1, d) }])
-    setNewEvento(emptyEvento)
-    setShowAdd(false)
+  const addEvento = async () => {
+    if (!newEvento.animal_id || !newEvento.fecha) { setError("Selecciona un animal y una fecha"); return }
+    try {
+      setError(null)
+      await sanidadApi.crear({
+        animal_id: Number(newEvento.animal_id),
+        tipo: newEvento.tipo,
+        producto: "",
+        fecha: newEvento.fecha,
+        proximo_control: null,
+        costo: 0,
+        responsable: "",
+        estado: "pendiente",
+        nota: newEvento.nota,
+      })
+      setNewEvento({ animal_id: "", tipo: Object.keys(tiposEvento)[0], fecha: "", nota: "" })
+      setShowAdd(false)
+      await cargar()
+    } catch (e) {
+      setError(e.message)
+    }
   }
 
-  const deleteEvento = (id) => setEventos(eventos.filter(e => e.id !== id))
+  const deleteEvento = async (id) => {
+    try { await sanidadApi.eliminar(id); await cargar() } catch (e) { setError(e.message) }
+  }
 
   const eventosDelDiaSeleccionado = selectedDay ? getEventosDelDia(selectedDay) : []
 
@@ -167,9 +192,10 @@ export default function VistaCalendarioAnimales() {
             <div style={styles.formGrid}>
               <div>
                 <label style={styles.label}>Animal</label>
-                <select style={styles.input} value={newEvento.animal}
-                  onChange={e => setNewEvento({ ...newEvento, animal: e.target.value })}>
-                  {animales.map(a => <option key={a}>{a}</option>)}
+                <select style={styles.input} value={newEvento.animal_id}
+                  onChange={e => setNewEvento({ ...newEvento, animal_id: e.target.value })}>
+                  <option value="">Seleccionar...</option>
+                  {animales.map(a => <option key={a.id} value={a.id}>{etiquetaAnimal(a)}</option>)}
                 </select>
               </div>
               <div>
@@ -190,6 +216,7 @@ export default function VistaCalendarioAnimales() {
                   onChange={e => setNewEvento({ ...newEvento, nota: e.target.value })} />
               </div>
             </div>
+            {error && <p style={{ fontSize: 12, color: "#DC2626", margin: "12px 0 0 0" }}>{error}</p>}
             <div style={styles.modalFooter}>
               <button style={styles.btnCancel} onClick={() => setShowAdd(false)}>Cancelar</button>
               <button style={styles.btnSave} onClick={addEvento}>Guardar</button>

@@ -18,6 +18,8 @@ import VistaArriendos from './pages/Arriendos'
 import VistaFacturacion from './pages/Facturacion'
 import VistaCalendarioArriendo from './pages/CalendarioMaquinas'
 import VistaHistoricosMaquinaria from './pages/HistoricoMaquinaria'
+import RebanoPotreros from './pages/RebanoPotreros'
+import Sanidad from './pages/Sanidad'
 
 function App() {
   return (
@@ -56,6 +58,8 @@ function App() {
             <Route path="plantcare" element={<DashboardPlantCare />} />
             <Route path="calendario" element={<VistaCalendarioAnimales />} />
             <Route path="historicos" element={<VistaHistoricosGastos />} />
+            <Route path="rebano" element={<RebanoPotreros />} />
+            <Route path="sanidad" element={<Sanidad />} />
           </Route>
         </Route>
 
