@@ -5,7 +5,7 @@ import useCarga from "../lib/useCarga"
 import { clp } from "../lib/formato"
 import EstadoCarga from "../components/EstadoCarga"
 import ModalLecheria, { Campo } from "../components/ModalLecheria"
-import s, { AZUL, ESTADO_MAQUINA } from "./estilosMaquinaria"
+import s, { AZUL, ESTADO_MAQUINA } from "./EstilosMaquinaria"
 
 const vacio = { nombre: "", modelo: "", tipo: "", estado: "Disponible", precio: 0, unidad_cobro: "hora", notas: "" }
 

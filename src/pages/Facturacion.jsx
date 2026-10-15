@@ -5,7 +5,7 @@ import { facturas as api } from "../services/maquinaria"
 import useCarga from "../lib/useCarga"
 import { clp, fechaCL, MESES_CORTO } from "../lib/formato"
 import EstadoCarga from "../components/EstadoCarga"
-import { ESTADO_FACTURA } from "./estilosMaquinaria"
+import { ESTADO_FACTURA } from "./EstilosMaquinaria"
 
 const POR_PAGINA = 100
 const nombreMaq = (f) => `${f.arriendo?.maquina?.nombre ?? ""} ${f.arriendo?.maquina?.modelo ?? ""}`.trim()

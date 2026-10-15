@@ -4,7 +4,7 @@ import { servicios as api, maquinas as maquinasApi } from "../services/maquinari
 import useCarga from "../lib/useCarga"
 import EstadoCarga from "../components/EstadoCarga"
 import ModalLecheria, { Campo } from "../components/ModalLecheria"
-import s, { AZUL } from "./estilosMaquinaria"
+import s, { AZUL } from "./EstilosMaquinaria"
 
 const vacio = { nombre: "", descripcion: "", unidad: "hectáreas", nota: "", maquinas: [] }
 

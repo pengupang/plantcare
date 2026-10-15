@@ -5,7 +5,7 @@ import useCarga from "../lib/useCarga"
 import { clp, fechaCL } from "../lib/formato"
 import EstadoCarga from "../components/EstadoCarga"
 import ModalArriendo from "../components/ModalArriendo"
-import s, { ESTADO_ARRIENDO } from "./estilosMaquinaria"
+import s, { ESTADO_ARRIENDO } from "./EstilosMaquinaria"
 
 const POR_PAGINA = 100
 

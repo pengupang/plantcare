@@ -1,7 +1,7 @@
 import { useState } from "react"
 import { arriendos as api } from "../services/maquinaria"
 import ModalLecheria, { Campo } from "./ModalLecheria"
-import s, { AZUL, ESTADO_ARRIENDO } from "../pages/estilosMaquinaria"
+import s, { AZUL, ESTADO_ARRIENDO } from "../pages/EstilosMaquinaria"
 
 // Formulario de arriendo (crear / editar). Lo usan Arriendos y el Calendario.
 //   catalogo = { clientes, maquinas, servicios }  (ver catalogos() en services/maquinaria)
