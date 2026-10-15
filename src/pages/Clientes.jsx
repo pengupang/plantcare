@@ -5,7 +5,7 @@ import { validarRut, formatearRut } from "../lib/auth"
 import useCarga from "../lib/useCarga"
 import EstadoCarga from "../components/EstadoCarga"
 import ModalLecheria, { Campo } from "../components/ModalLecheria"
-import s, { AZUL } from "./estilosMaquinaria"
+import s, { AZUL } from "./EstilosMaquinaria"
 
 const TIPOS = ["Agrícola", "Lechería", "Mixto"]
 const vacio = { nombre: "", rut: "", telefono_txt: "", email: "", direccion: "", comuna: "", tipo: "Agrícola", activo: true }
