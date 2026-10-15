@@ -13,7 +13,7 @@ function formatFecha(fechaISO) {
   return d.toLocaleDateString("es-CL", { day: "2-digit", month: "2-digit" })
 }
 
-function DashboardPlantCare() {
+function dashboard() {
   const [clientes, setClientes] = useState([])
   const [loadingClientes, setLoadingClientes] = useState(true)
 
@@ -326,4 +326,4 @@ function DashboardPlantCare() {
   )
 }
 
-export default DashboardPlantCare
+export default dashboard
