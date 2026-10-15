@@ -20,7 +20,7 @@ function formatDia(fechaISO) {
   return d.toLocaleDateString("es-CL", { weekday: "short", day: "numeric" })
 }
 
-function Mediciones() {
+function DashboardPlantCare() {
 
   const [estadoValidacion, setEstadoValidacion] = useState("pendiente") // 'pendiente', 'validada', 'anomalia'
   const [confirmandoAccion, setConfirmandoAccion] = useState(null) // null, 'aprobar', 'anomalia'
@@ -480,4 +480,4 @@ const obtenerRecomendacion = async () => {
   )
 }
 
-export default Mediciones
+export default DashboardPlantCare
