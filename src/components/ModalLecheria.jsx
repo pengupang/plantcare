@@ -11,10 +11,11 @@ export function Campo({ label, full, children }) {
   )
 }
 
-export default function ModalLecheria({ titulo, onClose, onSave, error, guardando, children }) {
+// `color` cambia el color del botón Guardar (verde por defecto = lechería; azul para maquinaria)
+export default function ModalLecheria({ titulo, onClose, onSave, error, guardando, color, ancho, children }) {
   return (
     <div style={s.modalOverlay} onClick={onClose}>
-      <div style={s.modal} onClick={(e) => e.stopPropagation()}>
+      <div style={{ ...s.modal, ...(ancho ? { maxWidth: ancho } : {}) }} onClick={(e) => e.stopPropagation()}>
         <div style={s.modalHeader}>
           <h3 style={s.modalTitle}>{titulo}</h3>
           <button style={s.iconBtn} onClick={onClose}><X size={16} /></button>
@@ -23,7 +24,7 @@ export default function ModalLecheria({ titulo, onClose, onSave, error, guardand
         {error && <p style={s.errorText}>{error}</p>}
         <div style={s.modalFooter}>
           <button style={s.btnCancel} onClick={onClose}>Cancelar</button>
-          <button style={{ ...s.btnSave, opacity: guardando ? 0.6 : 1 }} onClick={onSave} disabled={guardando}>
+          <button style={{ ...s.btnSave, ...(color ? { backgroundColor: color } : {}), opacity: guardando ? 0.6 : 1 }} onClick={onSave} disabled={guardando}>
             {guardando ? "Guardando..." : "Guardar"}
           </button>
         </div>

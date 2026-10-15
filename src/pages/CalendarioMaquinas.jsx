@@ -1,76 +1,78 @@
 import { useState } from "react"
-import { Plus, X, ChevronLeft, ChevronRight } from "lucide-react"
+import { Plus, ChevronLeft, ChevronRight } from "lucide-react"
+import { calendario, catalogos, maquinas as maquinasApi } from "../services/maquinaria"
+import useCarga from "../lib/useCarga"
+import { fechaCL } from "../lib/formato"
+import EstadoCarga from "../components/EstadoCarga"
+import ModalArriendo from "../components/ModalArriendo"
 
-const clientes = ["Juan Pérez","Agro Sur Ltda.","Campo Verde SpA","Pedro Soto"]
-const maquinas = ["Retroexcavadora CAT 320","Tractor New Holland T6","Minicargador Bobcat S570","Cosechadora John Deere S760"]
-
-const maquinaColors = {
-  "Retroexcavadora CAT 320":   { color:"#1D4ED8", bg:"#DBEAFE" },
-  "Tractor New Holland T6":    { color:"#065F46", bg:"#D1FAE5" },
-  "Minicargador Bobcat S570":  { color:"#7C3AED", bg:"#EDE9FE" },
-  "Cosechadora John Deere S760":{ color:"#B45309", bg:"#FEF3C7" },
-}
-
-const today = new Date()
-
-const initialArriendos = [
-  { id:1, cliente:"Juan Pérez", maquina:"Retroexcavadora CAT 320", inicio:new Date(today.getFullYear(),today.getMonth(),1), fin:new Date(today.getFullYear(),today.getMonth(),10) },
-  { id:2, cliente:"Agro Sur Ltda.", maquina:"Tractor New Holland T6", inicio:new Date(today.getFullYear(),today.getMonth(),5), fin:new Date(today.getFullYear(),today.getMonth(),15) },
-  { id:3, cliente:"Campo Verde SpA", maquina:"Cosechadora John Deere S760", inicio:new Date(today.getFullYear(),today.getMonth(),7), fin:new Date(today.getFullYear(),today.getMonth(),20) },
-  { id:4, cliente:"Pedro Soto", maquina:"Minicargador Bobcat S570", inicio:new Date(today.getFullYear(),today.getMonth(),18), fin:new Date(today.getFullYear(),today.getMonth(),25) },
+// Un color por máquina (se asignan en orden; si hay más de 6 máquinas se repiten)
+const PALETA = [
+  { color:"#1D4ED8", bg:"#DBEAFE" },
+  { color:"#065F46", bg:"#D1FAE5" },
+  { color:"#7C3AED", bg:"#EDE9FE" },
+  { color:"#B45309", bg:"#FEF3C7" },
+  { color:"#0E7490", bg:"#CFFAFE" },
+  { color:"#BE185D", bg:"#FCE7F3" },
 ]
+const MANTENCION = { color:"#991B1B", bg:"#FEE2E2" }
 
 const DIAS = ["Dom","Lun","Mar","Mié","Jue","Vie","Sáb"]
 const MESES = ["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"]
-
-const emptyArriendo = { cliente:clientes[0], maquina:maquinas[0], inicio:"", fin:"" }
+const iso = (y, m, d) => `${y}-${String(m + 1).padStart(2,"0")}-${String(d).padStart(2,"0")}`
 
 export default function VistaCalendarioArriendo() {
-  const [arriendos, setArriendos] = useState(initialArriendos)
-  const [viewDate, setViewDate] = useState(new Date(today.getFullYear(),today.getMonth(),1))
-  const [showAdd, setShowAdd] = useState(false)
-  const [newA, setNewA] = useState(emptyArriendo)
+  const today = new Date()
+  const [viewDate, setViewDate] = useState(new Date(today.getFullYear(), today.getMonth(), 1))
   const [selectedDay, setSelectedDay] = useState(null)
+  const [modal, setModal] = useState(null)
 
-  const prevMonth = () => setViewDate(new Date(viewDate.getFullYear(),viewDate.getMonth()-1,1))
-  const nextMonth = () => setViewDate(new Date(viewDate.getFullYear(),viewDate.getMonth()+1,1))
+  const anio = viewDate.getFullYear()
+  const mes = viewDate.getMonth()
+  const daysInMonth = new Date(anio, mes + 1, 0).getDate()
+  const firstDay = new Date(anio, mes, 1).getDay()
+  const desde = iso(anio, mes, 1)
+  const hasta = iso(anio, mes, daysInMonth)
 
-  const daysInMonth = new Date(viewDate.getFullYear(),viewDate.getMonth()+1,0).getDate()
-  const firstDay = new Date(viewDate.getFullYear(),viewDate.getMonth(),1).getDay()
+  // Eventos (arriendos + mantenciones) que tocan el mes visible; se recarga al cambiar de mes
+  const { datos: eventos, cargando, error, recargar } = useCarga(() => calendario(desde, hasta), [], desde)
+  const { datos: maquinas } = useCarga(maquinasApi.listar, [])
+  const { datos: catalogo } = useCarga(catalogos, { clientes: [], maquinas: [], servicios: [] })
 
-  const getArriendosDia = (day) => {
-    const d = new Date(viewDate.getFullYear(),viewDate.getMonth(),day)
-    return arriendos.filter(a => d >= a.inicio && d <= a.fin)
+  const colorDe = (e) => (e.origen === "mantencion" ? MANTENCION : PALETA[Math.max(0, maquinas.findIndex((m) => m.id === e.maquina_id)) % PALETA.length])
+
+  const eventosDia = (day) => {
+    const d = iso(anio, mes, day)
+    return eventos.filter((e) => e.inicio <= d && e.fin >= d)
   }
+  const prevMonth = () => { setSelectedDay(null); setViewDate(new Date(anio, mes - 1, 1)) }
+  const nextMonth = () => { setSelectedDay(null); setViewDate(new Date(anio, mes + 1, 1)) }
 
-  const addArriendo = () => {
-    const [yi,mi,di] = newA.inicio.split("-").map(Number)
-    const [yf,mf,df] = newA.fin.split("-").map(Number)
-    setArriendos([...arriendos,{...newA,id:Date.now(),inicio:new Date(yi,mi-1,di),fin:new Date(yf,mf-1,df)}])
-    setNewA(emptyArriendo); setShowAdd(false)
-  }
-
-  const arriendosDiaSeleccionado = selectedDay ? getArriendosDia(selectedDay) : []
+  const panel = selectedDay ? eventosDia(selectedDay) : eventos
+  const nArriendos = eventos.filter((e) => e.origen === "arriendo").length
 
   return (
     <div style={styles.container}>
       <div style={styles.topBar}>
-        <div><h2 style={styles.title}>Calendario de Arriendos</h2><p style={styles.sub}>{arriendos.length} arriendos activos</p></div>
-        <button style={styles.btnAdd} onClick={()=>setShowAdd(true)}><Plus size={15}/> Nuevo arriendo</button>
+        <div><h2 style={styles.title}>Calendario de Arriendos</h2><p style={styles.sub}>{nArriendos} arriendos y {eventos.length - nArriendos} mantenciones en {MESES[mes].toLowerCase()} {anio}</p></div>
+        <button style={styles.btnAdd} onClick={()=>setModal({})}><Plus size={15}/> Nuevo arriendo</button>
       </div>
 
       {/* Leyenda */}
       <div style={styles.leyenda}>
-        {Object.entries(maquinaColors).map(([maq,{color,bg}])=>(
-          <span key={maq} style={{...styles.leyendaItem,backgroundColor:bg,color}}><span style={{...styles.dot,backgroundColor:color}}/>{maq}</span>
+        {maquinas.map((m, i)=>(
+          <span key={m.id} style={{...styles.leyendaItem,backgroundColor:PALETA[i % PALETA.length].bg,color:PALETA[i % PALETA.length].color}}><span style={{...styles.dot,backgroundColor:PALETA[i % PALETA.length].color}}/>{m.nombre} {m.modelo}</span>
         ))}
+        <span style={{...styles.leyendaItem,backgroundColor:MANTENCION.bg,color:MANTENCION.color}}><span style={{...styles.dot,backgroundColor:MANTENCION.color}}/>Mantención</span>
       </div>
+
+      <EstadoCarga cargando={false} error={error} onReintentar={recargar} />
 
       <div style={styles.calLayout}>
         <div style={styles.calCard}>
           <div style={styles.calHeader}>
             <button style={styles.navBtn} onClick={prevMonth}><ChevronLeft size={16}/></button>
-            <span style={styles.mesLabel}>{MESES[viewDate.getMonth()]} {viewDate.getFullYear()}</span>
+            <span style={styles.mesLabel}>{MESES[mes]} {anio}{cargando ? " …" : ""}</span>
             <button style={styles.navBtn} onClick={nextMonth}><ChevronRight size={16}/></button>
           </div>
           <div style={styles.diasSemana}>{DIAS.map(d=><div key={d} style={styles.diaSemana}>{d}</div>)}</div>
@@ -78,15 +80,16 @@ export default function VistaCalendarioArriendo() {
             {Array(firstDay).fill(null).map((_,i)=><div key={`e${i}`}/>)}
             {Array(daysInMonth).fill(null).map((_,i)=>{
               const day = i+1
-              const evs = getArriendosDia(day)
-              const isToday = today.getDate()===day && today.getMonth()===viewDate.getMonth() && today.getFullYear()===viewDate.getFullYear()
+              const evs = eventosDia(day)
+              const isToday = today.getDate()===day && today.getMonth()===mes && today.getFullYear()===anio
               const isSelected = selectedDay===day
               return (
                 <div key={day} style={{...styles.dayCell,backgroundColor:isSelected?"#1B2A4A":isToday?"#EBF2FB":"#fff",border:isToday?"1px solid #4A6FA5":"1px solid #F1F5F9"}}
-                  onClick={()=>setSelectedDay(day)}>
+                  onClick={()=>setSelectedDay(isSelected ? null : day)}>
                   <span style={{...styles.dayNum,color:isSelected?"#fff":isToday?"#4A6FA5":"#334155",fontWeight:isToday?700:400}}>{day}</span>
                   <div style={styles.eventDots}>
-                    {evs.slice(0,3).map(e=><span key={e.id} style={{...styles.eventDot,backgroundColor:maquinaColors[e.maquina]?.color}}/>)}
+                    {evs.slice(0,3).map(e=><span key={`${e.origen}${e.id}`} style={{...styles.eventDot,backgroundColor:colorDe(e).color}}/>)}
+                    {evs.length > 3 && <span style={{fontSize:9,color:isSelected?"#fff":"#64748B"}}>+{evs.length-3}</span>}
                   </div>
                 </div>
               )
@@ -95,33 +98,27 @@ export default function VistaCalendarioArriendo() {
         </div>
 
         <div style={styles.sidePanel}>
-          <h3 style={styles.sidePanelTitle}>{selectedDay ? `${selectedDay} de ${MESES[viewDate.getMonth()]}` : "Arriendos activos"}</h3>
-          {(selectedDay ? arriendosDiaSeleccionado : arriendos).length === 0
-            ? <p style={styles.noEventos}>Sin arriendos</p>
-            : (selectedDay ? arriendosDiaSeleccionado : arriendos).map(a=>(
-              <div key={a.id} style={styles.eventoCard}>
-                <div style={{...styles.maqBadge,backgroundColor:maquinaColors[a.maquina]?.bg,color:maquinaColors[a.maquina]?.color}}>{a.maquina}</div>
-                <p style={styles.clienteLabel}>{a.cliente}</p>
-                <p style={styles.fechaLabel}>{a.inicio.toLocaleDateString("es-CL")} → {a.fin.toLocaleDateString("es-CL")}</p>
+          <h3 style={styles.sidePanelTitle}>{selectedDay ? `${selectedDay} de ${MESES[mes]}` : `Todo ${MESES[mes].toLowerCase()}`}</h3>
+          {panel.length === 0
+            ? <p style={styles.noEventos}>Sin arriendos ni mantenciones</p>
+            : panel.map(e=>(
+              <div key={`${e.origen}${e.id}`} style={styles.eventoCard}>
+                <div style={{...styles.maqBadge,backgroundColor:colorDe(e).bg,color:colorDe(e).color}}>{e.maquina}</div>
+                <p style={styles.clienteLabel}>{e.origen === "mantencion" ? `🔧 ${e.titulo}` : `${e.cliente} · ${e.titulo}`}</p>
+                <p style={styles.fechaLabel}>{fechaCL(e.inicio)}{e.fin !== e.inicio ? ` → ${fechaCL(e.fin)}` : ""} · {e.estado}</p>
               </div>
             ))
           }
         </div>
       </div>
 
-      {showAdd && (
-        <div style={styles.modalOverlay}>
-          <div style={styles.modal}>
-            <div style={styles.modalHeader}><h3 style={styles.modalTitle}>Nuevo arriendo</h3><button style={styles.iconBtn} onClick={()=>setShowAdd(false)}><X size={16}/></button></div>
-            <div style={styles.formGrid}>
-              <div><label style={styles.label}>Cliente</label><select style={styles.input} value={newA.cliente} onChange={e=>setNewA({...newA,cliente:e.target.value})}>{clientes.map(c=><option key={c}>{c}</option>)}</select></div>
-              <div><label style={styles.label}>Máquina</label><select style={styles.input} value={newA.maquina} onChange={e=>setNewA({...newA,maquina:e.target.value})}>{maquinas.map(m=><option key={m}>{m}</option>)}</select></div>
-              <div><label style={styles.label}>Fecha inicio</label><input style={styles.input} type="date" value={newA.inicio} onChange={e=>setNewA({...newA,inicio:e.target.value})} /></div>
-              <div><label style={styles.label}>Fecha fin</label><input style={styles.input} type="date" value={newA.fin} onChange={e=>setNewA({...newA,fin:e.target.value})} /></div>
-            </div>
-            <div style={styles.modalFooter}><button style={styles.btnCancel} onClick={()=>setShowAdd(false)}>Cancelar</button><button style={styles.btnSave} onClick={addArriendo}>Guardar</button></div>
-          </div>
-        </div>
+      {modal && (
+        <ModalArriendo
+          inicial={selectedDay ? { inicio: iso(anio, mes, selectedDay), fin: iso(anio, mes, selectedDay) } : {}}
+          catalogo={catalogo}
+          onClose={()=>setModal(null)}
+          onGuardado={async ()=>{ setModal(null); await recargar() }}
+        />
       )}
     </div>
   )

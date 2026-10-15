@@ -1,6 +1,12 @@
-import { useState } from "react"
+import { useCallback, useMemo, useState } from "react"
 import { Plus, X, TrendingUp, TrendingDown, DollarSign, ShoppingCart } from "lucide-react"
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, LineChart, Line, PieChart, Pie, Cell, Legend } from "recharts"
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from "recharts"
+import { gastos as api, proveedores as proveedoresApi } from "../services/lecheria"
+import useCarga from "../lib/useCarga"
+import { clp, fechaCL, MESES_CORTO as MESES } from "../lib/formato"
+import EstadoCarga from "../components/EstadoCarga"
+import ModalLecheria, { Campo } from "../components/ModalLecheria"
+import s from "./estilosLecheria"
 
 const categorias = ["Alimentación", "Veterinario", "Mantención", "Insumos", "Otros"]
 const categoriasColors = {
@@ -10,76 +16,122 @@ const categoriasColors = {
   "Insumos":      "#8B5CF6",
   "Otros":        "#94A3B8",
 }
+const POR_PAGINA = 100
+const hoyISO = () => {
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`
+}
+const emptyGasto = () => ({ fecha: hoyISO(), categoria: categorias[0], descripcion: "", monto: 0, proveedor_id: "", documento: "" })
 
-const initialGastos = [
-  { id: 1, fecha: "2026-01-15", categoria: "Alimentación", descripcion: "Heno alfalfa x20 fardos", monto: 170000 },
-  { id: 2, fecha: "2026-02-03", categoria: "Veterinario",  descripcion: "Control mensual Dr. Lagos", monto: 85000 },
-  { id: 3, fecha: "2026-02-18", categoria: "Insumos",      descripcion: "Vitaminas y minerales", monto: 45000 },
-  { id: 4, fecha: "2026-03-10", categoria: "Alimentación", descripcion: "Maíz molido x10 sacos", monto: 180000 },
-  { id: 5, fecha: "2026-03-22", categoria: "Mantención",   descripcion: "Reparación corral", monto: 120000 },
-  { id: 6, fecha: "2026-04-05", categoria: "Veterinario",  descripcion: "Inseminación artificial", monto: 95000 },
-  { id: 7, fecha: "2026-04-20", categoria: "Alimentación", descripcion: "Heno + melaza", monto: 190000 },
-  { id: 8, fecha: "2026-05-08", categoria: "Insumos",      descripcion: "Sal mineral x3 sacos", monto: 36000 },
-  { id: 9, fecha: "2026-06-12", categoria: "Alimentación", descripcion: "Heno alfalfa x25 fardos", monto: 212500 },
-  { id: 10, fecha: "2026-07-03", categoria: "Veterinario", descripcion: "Vacunación triple bovina", monto: 72000 },
-  { id: 11, fecha: "2026-08-15", categoria: "Mantención",  descripcion: "Pintura galpón", monto: 65000 },
-  { id: 12, fecha: "2026-09-20", categoria: "Alimentación", descripcion: "Concentrado proteico", monto: 225000 },
-  { id: 13, fecha: "2026-10-01", categoria: "Veterinario", descripcion: "Control prenatal Vaca 04", monto: 55000 },
-  { id: 14, fecha: "2026-10-05", categoria: "Insumos",     descripcion: "Vitamina ADE x2 litros", monto: 50000 },
-]
-
-const MESES = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"]
-
-const emptyGasto = { fecha: "", categoria: categorias[0], descripcion: "", monto: 0 }
+const sumarPor = (lista, clave) => {
+  const acc = {}
+  for (const g of lista) acc[clave(g)] = (acc[clave(g)] || 0) + Number(g.monto)
+  return acc
+}
 
 export default function VistaHistoricosGastos() {
-  const [gastos, setGastos] = useState(initialGastos)
-  const [showAdd, setShowAdd] = useState(false)
-  const [newGasto, setNewGasto] = useState(emptyGasto)
-  const [filtroCategoria, setFiltroCategoria] = useState("Todos")
+  const cargarTodo = useCallback(async () => {
+    const [gastos, proveedores] = await Promise.all([api.listar(), proveedoresApi.listar()])
+    return { gastos, proveedores }
+  }, [])
+  const { datos, cargando, error, setError, recargar } = useCarga(cargarTodo, { gastos: [], proveedores: [] })
+  const { gastos, proveedores } = datos
 
-  const addGasto = () => {
-    setGastos([...gastos, { ...newGasto, id: Date.now(), monto: Number(newGasto.monto) }])
-    setNewGasto(emptyGasto)
-    setShowAdd(false)
-  }
-  const deleteGasto = (id) => setGastos(gastos.filter(g => g.id !== id))
+  const hoy = new Date()
+  const [anio, setAnio] = useState(String(hoy.getFullYear())) // "todos" = todos los años
+  const [filtroCategoria, setFiltroCategoria] = useState("Todos")
+  const [limite, setLimite] = useState(POR_PAGINA)
+  const [modal, setModal] = useState(null)
+  const [modalError, setModalError] = useState(null)
+  const [guardando, setGuardando] = useState(false)
+
+  const anios = useMemo(() => {
+    const a = new Set(gastos.map((g) => g.fecha.slice(0, 4)))
+    a.add(String(hoy.getFullYear()))
+    return [...a].sort().reverse()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [gastos])
+
+  const delPeriodo = useMemo(() => (anio === "todos" ? gastos : gastos.filter((g) => g.fecha.startsWith(anio))), [gastos, anio])
+  const nombreProveedor = (id) => proveedores.find((p) => p.id === id)?.nombre
 
   // Stats
-  const totalGastos = gastos.reduce((sum, g) => sum + g.monto, 0)
-  const gastosMes = gastos.filter(g => g.fecha.startsWith("2026-10")).reduce((sum, g) => sum + g.monto, 0)
-  const maxCategoria = Object.entries(
-    gastos.reduce((acc, g) => { acc[g.categoria] = (acc[g.categoria] || 0) + g.monto; return acc }, {})
-  ).sort((a, b) => b[1] - a[1])[0]
+  const totalGastos = delPeriodo.reduce((sum, g) => sum + Number(g.monto), 0)
+  const mesActual = `${hoy.getFullYear()}-${String(hoy.getMonth() + 1).padStart(2, "0")}`
+  const gastosMes = gastos.filter((g) => g.fecha.startsWith(mesActual)).reduce((sum, g) => sum + Number(g.monto), 0)
+  const porCategoria = sumarPor(delPeriodo, (g) => g.categoria)
+  const maxCategoria = Object.entries(porCategoria).sort((a, b) => b[1] - a[1])[0]
 
-  // Datos por mes para gráfico de barras
-  const datosMes = MESES.map((mes, i) => ({
-    mes,
-    total: gastos.filter(g => g.fecha.startsWith(`2026-${String(i+1).padStart(2,"0")}`))
-                 .reduce((sum, g) => sum + g.monto, 0)
-  })).filter(d => d.total > 0)
+  // Gráfico de barras: por mes si hay un año elegido, por año si son "todos"
+  const datosMes = useMemo(() => {
+    if (anio === "todos") {
+      const porAnio = sumarPor(gastos, (g) => g.fecha.slice(0, 4))
+      return Object.keys(porAnio).sort().map((a) => ({ mes: a, total: porAnio[a] }))
+    }
+    const porMes = sumarPor(delPeriodo, (g) => g.fecha.slice(5, 7))
+    return MESES.map((mes, i) => ({ mes, total: porMes[String(i + 1).padStart(2, "0")] || 0 }))
+  }, [anio, gastos, delPeriodo])
 
-  // Datos por categoría para pie
-  const datosCat = Object.entries(
-    gastos.reduce((acc, g) => { acc[g.categoria] = (acc[g.categoria] || 0) + g.monto; return acc }, {})
-  ).map(([name, value]) => ({ name, value }))
+  const datosCat = Object.entries(porCategoria).map(([name, value]) => ({ name, value }))
 
-  const gastosFiltrados = filtroCategoria === "Todos"
-    ? gastos
-    : gastos.filter(g => g.categoria === filtroCategoria)
+  const gastosFiltrados = useMemo(
+    () => (filtroCategoria === "Todos" ? delPeriodo : delPeriodo.filter((g) => g.categoria === filtroCategoria)),
+    [delPeriodo, filtroCategoria]
+  )
+
+  const campo = (k, v) => setModal((m) => ({ ...m, [k]: v }))
+
+  const addGasto = async () => {
+    if (!modal.fecha) return setModalError("Indica la fecha")
+    if (!modal.descripcion.trim()) return setModalError("La descripción es obligatoria")
+    if (!(Number(modal.monto) >= 0)) return setModalError("El monto no puede ser negativo")
+    const payload = {
+      fecha: modal.fecha,
+      categoria: modal.categoria,
+      descripcion: modal.descripcion.trim(),
+      monto: Math.round(Number(modal.monto) || 0),
+      proveedor_id: modal.proveedor_id === "" ? null : Number(modal.proveedor_id),
+      documento: modal.documento.trim() || null,
+    }
+    try {
+      setGuardando(true)
+      setModalError(null)
+      await api.crear(payload)
+      setModal(null)
+      await recargar()
+    } catch (e) {
+      setModalError(e.message)
+    } finally {
+      setGuardando(false)
+    }
+  }
+
+  const deleteGasto = async (g) => {
+    if (!window.confirm(`¿Eliminar "${g.descripcion}" (${fechaCL(g.fecha)})?`)) return
+    try { await api.eliminar(g.id); await recargar() } catch (e) { setError(e.message) }
+  }
 
   return (
     <div style={styles.container}>
       <div style={styles.topBar}>
         <div>
           <h2 style={styles.title}>Histórico de Gastos</h2>
-          <p style={styles.sub}>{gastos.length} registros</p>
+          <p style={styles.sub}>{delPeriodo.length.toLocaleString("es-CL")} registros · {anio === "todos" ? "todos los años" : anio}</p>
         </div>
-        <button style={styles.btnAdd} onClick={() => setShowAdd(true)}>
-          <Plus size={15} /> Agregar gasto
-        </button>
+        <div style={{ display: "flex", gap: 10 }}>
+          <select style={s.select} value={anio} onChange={(e) => { setAnio(e.target.value); setLimite(POR_PAGINA) }}>
+            <option value="todos">Todos los años</option>
+            {anios.map((a) => <option key={a} value={a}>{a}</option>)}
+          </select>
+          <button style={styles.btnAdd} onClick={() => { setModalError(null); setModal(emptyGasto()) }}>
+            <Plus size={15} /> Agregar gasto
+          </button>
+        </div>
       </div>
 
+      <EstadoCarga cargando={cargando} error={error} onReintentar={recargar} />
+
+      {!cargando && !error && (<>
       {/* Cards resumen */}
       <div style={styles.statsGrid}>
         <div style={styles.statCard}>
@@ -87,8 +139,8 @@ export default function VistaHistoricosGastos() {
             <DollarSign size={18} color="#3D6B4F" />
           </div>
           <div>
-            <p style={styles.statValue}>${totalGastos.toLocaleString("es-CL")}</p>
-            <p style={styles.statLabel}>Total histórico</p>
+            <p style={styles.statValue}>{clp(totalGastos)}</p>
+            <p style={styles.statLabel}>{anio === "todos" ? "Total histórico" : `Total ${anio}`}</p>
           </div>
         </div>
         <div style={styles.statCard}>
@@ -96,7 +148,7 @@ export default function VistaHistoricosGastos() {
             <TrendingUp size={18} color="#3B82F6" />
           </div>
           <div>
-            <p style={styles.statValue}>${gastosMes.toLocaleString("es-CL")}</p>
+            <p style={styles.statValue}>{clp(gastosMes)}</p>
             <p style={styles.statLabel}>Gastos este mes</p>
           </div>
         </div>
@@ -105,7 +157,7 @@ export default function VistaHistoricosGastos() {
             <ShoppingCart size={18} color="#8B5CF6" />
           </div>
           <div>
-            <p style={styles.statValue}>{maxCategoria?.[0]}</p>
+            <p style={styles.statValue}>{maxCategoria?.[0] ?? "—"}</p>
             <p style={styles.statLabel}>Mayor categoría</p>
           </div>
         </div>
@@ -114,7 +166,7 @@ export default function VistaHistoricosGastos() {
             <TrendingDown size={18} color="#F59E0B" />
           </div>
           <div>
-            <p style={styles.statValue}>${Math.round(totalGastos / gastos.length).toLocaleString("es-CL")}</p>
+            <p style={styles.statValue}>{clp(delPeriodo.length ? totalGastos / delPeriodo.length : 0)}</p>
             <p style={styles.statLabel}>Gasto promedio</p>
           </div>
         </div>
@@ -123,12 +175,12 @@ export default function VistaHistoricosGastos() {
       {/* Gráficos */}
       <div style={styles.chartsRow}>
         <div style={styles.chartCard}>
-          <h3 style={styles.chartTitle}>Gastos por mes</h3>
+          <h3 style={styles.chartTitle}>{anio === "todos" ? "Gastos por año" : `Gastos por mes ${anio}`}</h3>
           <ResponsiveContainer width="100%" height={200}>
             <BarChart data={datosMes}>
               <XAxis dataKey="mes" tick={{ fontSize: 11 }} />
-              <YAxis tick={{ fontSize: 11 }} tickFormatter={v => `$${(v/1000).toFixed(0)}k`} />
-              <Tooltip formatter={v => [`$${v.toLocaleString("es-CL")}`, "Total"]} />
+              <YAxis tick={{ fontSize: 11 }} tickFormatter={v => `$${(v/1000000).toFixed(1)}M`} />
+              <Tooltip formatter={v => [clp(v), "Total"]} />
               <Bar dataKey="total" fill="#3D6B4F" radius={[4,4,0,0]} />
             </BarChart>
           </ResponsiveContainer>
@@ -143,7 +195,7 @@ export default function VistaHistoricosGastos() {
                 ))}
               </Pie>
               <Legend iconSize={10} wrapperStyle={{ fontSize: 11 }} />
-              <Tooltip formatter={v => [`$${v.toLocaleString("es-CL")}`]} />
+              <Tooltip formatter={v => [clp(v)]} />
             </PieChart>
           </ResponsiveContainer>
         </div>
@@ -152,10 +204,10 @@ export default function VistaHistoricosGastos() {
       {/* Tabla */}
       <div style={styles.tableCard}>
         <div style={styles.tableTopBar}>
-          <h3 style={styles.tableTitle}>Detalle de gastos</h3>
+          <h3 style={styles.tableTitle}>Detalle de gastos ({gastosFiltrados.length.toLocaleString("es-CL")})</h3>
           <div style={styles.filtros}>
             {["Todos", ...categorias].map(c => (
-              <button key={c} onClick={() => setFiltroCategoria(c)}
+              <button key={c} onClick={() => { setFiltroCategoria(c); setLimite(POR_PAGINA) }}
                 style={{ ...styles.filtroBadge, backgroundColor: filtroCategoria === c ? "#1E3128" : "#F1F5F9", color: filtroCategoria === c ? "#fff" : "#64748B" }}>
                 {c}
               </button>
@@ -165,69 +217,58 @@ export default function VistaHistoricosGastos() {
         <table style={styles.table}>
           <thead>
             <tr>
-              {["Fecha", "Categoría", "Descripción", "Monto", ""].map(h => (
+              {["Fecha", "Categoría", "Descripción", "Proveedor", "Monto", ""].map(h => (
                 <th key={h} style={styles.th}>{h}</th>
               ))}
             </tr>
           </thead>
           <tbody>
-            {[...gastosFiltrados].sort((a,b) => b.fecha.localeCompare(a.fecha)).map((g, i) => (
+            {gastosFiltrados.slice(0, limite).map((g, i) => (
               <tr key={g.id} style={{ backgroundColor: i % 2 === 0 ? "#F8FAFC" : "#ffffff" }}>
-                <td style={styles.td}>{g.fecha}</td>
+                <td style={styles.td}>{fechaCL(g.fecha)}</td>
                 <td style={styles.td}>
                   <span style={{ ...styles.catBadge, backgroundColor: categoriasColors[g.categoria] + "20", color: categoriasColors[g.categoria] }}>
                     {g.categoria}
                   </span>
                 </td>
-                <td style={styles.td}>{g.descripcion}</td>
-                <td style={{ ...styles.td, fontWeight: 600 }}>${Number(g.monto).toLocaleString("es-CL")}</td>
+                <td style={styles.td}>{g.descripcion}{g.documento && <span style={{ display: "block", fontSize: 11, color: "#94A3B8" }}>Doc. {g.documento}</span>}</td>
+                <td style={styles.td}>{nombreProveedor(g.proveedor_id) ?? "—"}</td>
+                <td style={{ ...styles.td, fontWeight: 600 }}>{clp(g.monto)}</td>
                 <td style={styles.td}>
-                  <button style={styles.deleteBtn} onClick={() => deleteGasto(g.id)}><X size={14} /></button>
+                  <button style={styles.deleteBtn} title="Eliminar" onClick={() => deleteGasto(g)}><X size={14} /></button>
                 </td>
               </tr>
             ))}
+            {gastosFiltrados.length === 0 && <tr><td colSpan={6} style={{ ...styles.td, textAlign: "center", color: "#94A3B8" }}>Sin gastos para este filtro.</td></tr>}
           </tbody>
         </table>
+        {gastosFiltrados.length > limite && (
+          <div style={{ padding: 12, textAlign: "center" }}>
+            <button style={s.btnCancel} onClick={() => setLimite(l => l + POR_PAGINA)}>Ver más ({(gastosFiltrados.length - limite).toLocaleString("es-CL")} restantes)</button>
+          </div>
+        )}
       </div>
+      </>)}
 
       {/* Modal */}
-      {showAdd && (
-        <div style={styles.modalOverlay}>
-          <div style={styles.modal}>
-            <div style={styles.modalHeader}>
-              <h3 style={styles.modalTitle}>Nuevo gasto</h3>
-              <button style={styles.iconBtn} onClick={() => setShowAdd(false)}><X size={16} /></button>
-            </div>
-            <div style={styles.formGrid}>
-              <div>
-                <label style={styles.label}>Fecha</label>
-                <input style={styles.input} type="date" value={newGasto.fecha}
-                  onChange={e => setNewGasto({ ...newGasto, fecha: e.target.value })} />
-              </div>
-              <div>
-                <label style={styles.label}>Categoría</label>
-                <select style={styles.input} value={newGasto.categoria}
-                  onChange={e => setNewGasto({ ...newGasto, categoria: e.target.value })}>
-                  {categorias.map(c => <option key={c}>{c}</option>)}
-                </select>
-              </div>
-              <div style={{ gridColumn: "span 2" }}>
-                <label style={styles.label}>Descripción</label>
-                <input style={styles.input} value={newGasto.descripcion}
-                  onChange={e => setNewGasto({ ...newGasto, descripcion: e.target.value })} />
-              </div>
-              <div>
-                <label style={styles.label}>Monto (CLP)</label>
-                <input style={styles.input} type="number" value={newGasto.monto}
-                  onChange={e => setNewGasto({ ...newGasto, monto: e.target.value })} />
-              </div>
-            </div>
-            <div style={styles.modalFooter}>
-              <button style={styles.btnCancel} onClick={() => setShowAdd(false)}>Cancelar</button>
-              <button style={styles.btnSave} onClick={addGasto}>Guardar</button>
-            </div>
-          </div>
-        </div>
+      {modal && (
+        <ModalLecheria titulo="Nuevo gasto" onClose={() => setModal(null)} onSave={addGasto} error={modalError} guardando={guardando}>
+          <Campo label="Fecha"><input style={s.input} type="date" value={modal.fecha} onChange={e => campo("fecha", e.target.value)} /></Campo>
+          <Campo label="Categoría">
+            <select style={s.input} value={modal.categoria} onChange={e => campo("categoria", e.target.value)}>
+              {categorias.map(c => <option key={c}>{c}</option>)}
+            </select>
+          </Campo>
+          <Campo label="Descripción" full><input style={s.input} value={modal.descripcion} onChange={e => campo("descripcion", e.target.value)} /></Campo>
+          <Campo label="Monto (CLP)"><input style={s.input} type="number" min="0" value={modal.monto} onChange={e => campo("monto", e.target.value)} /></Campo>
+          <Campo label="N° documento"><input style={s.input} value={modal.documento} onChange={e => campo("documento", e.target.value)} /></Campo>
+          <Campo label="Proveedor" full>
+            <select style={s.input} value={modal.proveedor_id} onChange={e => campo("proveedor_id", e.target.value)}>
+              <option value="">Sin proveedor</option>
+              {proveedores.map(p => <option key={p.id} value={p.id}>{p.nombre}</option>)}
+            </select>
+          </Campo>
+        </ModalLecheria>
       )}
     </div>
   )

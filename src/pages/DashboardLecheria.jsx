@@ -1,52 +1,11 @@
-import {
-  Leaf,
-  AlertTriangle,
-  Package,
-  Thermometer,
-  Droplets,
-} from "lucide-react"
+import { Leaf, AlertTriangle, Package, Thermometer, Droplets } from "lucide-react"
+import { resumenLecheria } from "../services/lecheria"
+import useCarga from "../lib/useCarga"
+import { hoyLargo } from "../lib/formato"
+import EstadoCarga from "../components/EstadoCarga"
 
-const stats = [
-  {
-    label: "Animales registrados",
-    value: "48",
-    icon: Leaf,
-    color: "#3D6B4F",
-    bg: "#D1FAE5",
-    sub: "en el sistema",
-  },
-  {
-    label: "Productos en stock",
-    value: "23",
-    icon: Package,
-    color: "#0EA5E9",
-    bg: "#E0F2FE",
-    sub: "ítems en inventario",
-  },
-  {
-    label: "Alertas de stock bajo",
-    value: "3",
-    icon: AlertTriangle,
-    color: "#EF4444",
-    bg: "#FEE2E2",
-    sub: "requieren atención",
-  },
-  {
-    label: "Última medición suelo",
-    value: "Hoy",
-    icon: Leaf,
-    color: "#10B981",
-    bg: "#D1FAE5",
-    sub: "PlantCare activo",
-  },
-]
-
-const alertasStock = [
-  { producto: "Heno de alfalfa", stock: 2, minimo: 5, unidad: "fardos" },
-  { producto: "Sal mineral", stock: 1, minimo: 3, unidad: "sacos" },
-  { producto: "Vitamina ADE", stock: 0, minimo: 2, unidad: "litros" },
-]
-
+// TODO: estas mediciones siguen siendo de ejemplo. Los datos reales de PlantCare
+// están en la tabla "Mediciones" (ver lib/groq.js y DashboardPlantCare.jsx).
 const ultimasMediciones = [
   { parametro: "Humedad suelo", valor: "38.4 %", icono: Droplets, color: "#0EA5E9" },
   { parametro: "Temperatura suelo", valor: "14.2 °C", icono: Thermometer, color: "#F59E0B" },
@@ -57,10 +16,20 @@ const ultimasMediciones = [
 ]
 
 export default function DashboardLecheria() {
+  const { datos: r, cargando, error, recargar } = useCarga(resumenLecheria, null)
+
+  const stats = r && [
+    { label: "Animales activos", value: r.animalesActivos.toLocaleString("es-CL"), icon: Leaf, color: "#3D6B4F", bg: "#D1FAE5", sub: "en el rebaño" },
+    { label: "Productos en stock", value: r.totalInsumos, icon: Package, color: "#0EA5E9", bg: "#E0F2FE", sub: "ítems en inventario" },
+    { label: "Alertas de stock bajo", value: r.alertasStock.length, icon: AlertTriangle, color: "#EF4444", bg: "#FEE2E2", sub: "requieren atención" },
+  ]
+
   return (
     <div style={styles.container}>
-      <p style={styles.fecha}>Miércoles, 7 de octubre de 2026</p>
+      <p style={styles.fecha}>{hoyLargo()}</p>
+      <EstadoCarga cargando={cargando} error={error} onReintentar={recargar} />
 
+      {r && (<>
       {/* Stats */}
       <div style={styles.grid}>
         {stats.map(({ label, value, icon: Icon, color, bg, sub }) => (
@@ -93,26 +62,27 @@ export default function DashboardLecheria() {
               </tr>
             </thead>
             <tbody>
-              {alertasStock.map((a, i) => (
-                <tr key={i} style={{ backgroundColor: i % 2 === 0 ? "#FFF7F7" : "#ffffff" }}>
-                  <td style={styles.td}>{a.producto}</td>
+              {r.alertasStock.map((a, i) => (
+                <tr key={a.id} style={{ backgroundColor: i % 2 === 0 ? "#FFF7F7" : "#ffffff" }}>
+                  <td style={styles.td}>{a.nombre}</td>
                   <td style={styles.td}>
-                    <span style={{ color: a.stock === 0 ? "#EF4444" : "#F59E0B", fontWeight: 600 }}>
-                      {a.stock} {a.unidad}
+                    <span style={{ color: Number(a.stock) === 0 ? "#EF4444" : "#F59E0B", fontWeight: 600 }}>
+                      {Number(a.stock).toLocaleString("es-CL")} {a.unidad}
                     </span>
                   </td>
-                  <td style={styles.td}>{a.minimo} {a.unidad}</td>
+                  <td style={styles.td}>{Number(a.minimo).toLocaleString("es-CL")} {a.unidad}</td>
                   <td style={styles.td}>
                     <span style={{
                       ...styles.badge,
-                      backgroundColor: a.stock === 0 ? "#FEE2E2" : "#FEF3C7",
-                      color: a.stock === 0 ? "#991B1B" : "#92400E",
+                      backgroundColor: Number(a.stock) === 0 ? "#FEE2E2" : "#FEF3C7",
+                      color: Number(a.stock) === 0 ? "#991B1B" : "#92400E",
                     }}>
-                      {a.stock === 0 ? "Sin stock" : "Stock bajo"}
+                      {Number(a.stock) === 0 ? "Sin stock" : "Stock bajo"}
                     </span>
                   </td>
                 </tr>
               ))}
+              {r.alertasStock.length === 0 && <tr><td colSpan={4} style={{ ...styles.td, textAlign: "center", color: "#94A3B8" }}>Todo el inventario está sobre el mínimo.</td></tr>}
             </tbody>
           </table>
         </div>
@@ -134,9 +104,10 @@ export default function DashboardLecheria() {
               </div>
             ))}
           </div>
-          <p style={styles.medicionFecha}>Última medición: hoy 09:34 — Terreno Norte</p>
+          <p style={styles.medicionFecha}>Valores de ejemplo — pendiente conectar a Mediciones</p>
         </div>
       </div>
+      </>)}
     </div>
   )
 }

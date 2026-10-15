@@ -1,75 +1,28 @@
-import {
-  Wrench,
-  FileText,
-  Users,
-  CalendarCheck,
-  TrendingUp,
-  AlertCircle,
-} from "lucide-react"
-
-const stats = [
-  {
-    label: "Máquinas disponibles",
-    value: "8",
-    icon: Wrench,
-    color: "#4A6FA5",
-    bg: "#EBF2FB",
-    sub: "de 12 en total",
-  },
-  {
-    label: "En arriendo",
-    value: "3",
-    icon: FileText,
-    color: "#F59E0B",
-    bg: "#FEF3C7",
-    sub: "actualmente",
-  },
-  {
-    label: "En mantención",
-    value: "1",
-    icon: AlertCircle,
-    color: "#EF4444",
-    bg: "#FEE2E2",
-    sub: "fuera de servicio",
-  },
-  {
-    label: "Arriendos del mes",
-    value: "14",
-    icon: CalendarCheck,
-    color: "#10B981",
-    bg: "#D1FAE5",
-    sub: "octubre 2026",
-  },
-  {
-    label: "Clientes activos",
-    value: "27",
-    icon: Users,
-    color: "#8B5CF6",
-    bg: "#EDE9FE",
-    sub: "registrados",
-  },
-  {
-    label: "Ingresos del mes",
-    value: "$1.240.000",
-    icon: TrendingUp,
-    color: "#0EA5E9",
-    bg: "#E0F2FE",
-    sub: "CLP estimado",
-  },
-]
-
-const arriendosRecientes = [
-  { cliente: "Juan Pérez", maquina: "Retroexcavadora CAT 320", desde: "01/10/2026", hasta: "10/10/2026", estado: "Activo" },
-  { cliente: "Agro Sur Ltda.", maquina: "Tractor New Holland T6", desde: "05/10/2026", hasta: "15/10/2026", estado: "Activo" },
-  { cliente: "Pedro Soto", maquina: "Minicargador Bobcat S570", desde: "28/09/2026", hasta: "05/10/2026", estado: "Finalizado" },
-  { cliente: "Campo Verde SpA", maquina: "Cosechadora John Deere", desde: "07/10/2026", hasta: "20/10/2026", estado: "Activo" },
-]
+import { Wrench, FileText, Users, CalendarCheck, TrendingUp, AlertCircle } from "lucide-react"
+import { resumenMaquinaria } from "../services/maquinaria"
+import useCarga from "../lib/useCarga"
+import { clp, fechaCL, hoyLargo } from "../lib/formato"
+import EstadoCarga from "../components/EstadoCarga"
 
 export default function DashboardMaquinaria() {
+  const { datos: r, cargando, error, recargar } = useCarga(resumenMaquinaria, null)
+  const mesTxt = new Date().toLocaleDateString("es-CL", { month: "long", year: "numeric" })
+
+  const stats = r && [
+    { label: "Máquinas disponibles", value: r.disponibles, icon: Wrench, color: "#4A6FA5", bg: "#EBF2FB", sub: `de ${r.totalMaquinas} en total` },
+    { label: "En arriendo", value: r.arrendadas, icon: FileText, color: "#F59E0B", bg: "#FEF3C7", sub: "actualmente" },
+    { label: "En mantención", value: r.enMantencion, icon: AlertCircle, color: "#EF4444", bg: "#FEE2E2", sub: "fuera de servicio" },
+    { label: "Arriendos del mes", value: r.arriendosMes, icon: CalendarCheck, color: "#10B981", bg: "#D1FAE5", sub: mesTxt },
+    { label: "Clientes activos", value: r.clientesActivos, icon: Users, color: "#8B5CF6", bg: "#EDE9FE", sub: "registrados" },
+    { label: "Ingresos del mes", value: clp(r.ingresosMes), icon: TrendingUp, color: "#0EA5E9", bg: "#E0F2FE", sub: "CLP neto, sin pendientes" },
+  ]
+
   return (
     <div style={styles.container}>
-      <p style={styles.fecha}>Miércoles, 7 de octubre de 2026</p>
+      <p style={styles.fecha}>{hoyLargo()}</p>
+      <EstadoCarga cargando={cargando} error={error} onReintentar={recargar} />
 
+      {r && (<>
       {/* Stats */}
       <div style={styles.grid}>
         {stats.map(({ label, value, icon: Icon, color, bg, sub }) => (
@@ -92,18 +45,19 @@ export default function DashboardMaquinaria() {
         <table style={styles.table}>
           <thead>
             <tr>
-              {["Cliente", "Máquina", "Desde", "Hasta", "Estado"].map(h => (
+              {["Cliente", "Máquina", "Servicio", "Desde", "Hasta", "Estado"].map(h => (
                 <th key={h} style={styles.th}>{h}</th>
               ))}
             </tr>
           </thead>
           <tbody>
-            {arriendosRecientes.map((a, i) => (
-              <tr key={i} style={{ backgroundColor: i % 2 === 0 ? "#F8FAFC" : "#ffffff" }}>
-                <td style={styles.td}>{a.cliente}</td>
-                <td style={styles.td}>{a.maquina}</td>
-                <td style={styles.td}>{a.desde}</td>
-                <td style={styles.td}>{a.hasta}</td>
+            {r.recientes.map((a, i) => (
+              <tr key={a.id} style={{ backgroundColor: i % 2 === 0 ? "#F8FAFC" : "#ffffff" }}>
+                <td style={styles.td}>{a.cliente?.nombre}</td>
+                <td style={styles.td}>{a.maquina?.nombre} {a.maquina?.modelo}</td>
+                <td style={styles.td}>{a.servicio?.nombre}</td>
+                <td style={styles.td}>{fechaCL(a.inicio)}</td>
+                <td style={styles.td}>{fechaCL(a.fin)}</td>
                 <td style={styles.td}>
                   <span style={{
                     ...styles.badge,
@@ -115,9 +69,32 @@ export default function DashboardMaquinaria() {
                 </td>
               </tr>
             ))}
+            {r.recientes.length === 0 && <tr><td colSpan={6} style={{ ...styles.td, textAlign: "center", color: "#94A3B8" }}>Sin arriendos recientes.</td></tr>}
           </tbody>
         </table>
       </div>
+
+      {/* Próximas mantenciones */}
+      <div style={styles.tableCard}>
+        <h3 style={styles.tableTitle}>Próximas mantenciones</h3>
+        <table style={styles.table}>
+          <thead>
+            <tr>{["Máquina", "Tipo", "Taller", "Fecha"].map(h => <th key={h} style={styles.th}>{h}</th>)}</tr>
+          </thead>
+          <tbody>
+            {r.proximasMantenciones.map((m, i) => (
+              <tr key={m.id} style={{ backgroundColor: i % 2 === 0 ? "#F8FAFC" : "#ffffff" }}>
+                <td style={styles.td}>{m.maquina?.nombre} {m.maquina?.modelo}</td>
+                <td style={styles.td}>{m.tipo}</td>
+                <td style={styles.td}>{m.taller}</td>
+                <td style={styles.td}>{fechaCL(m.inicio)}</td>
+              </tr>
+            ))}
+            {r.proximasMantenciones.length === 0 && <tr><td colSpan={4} style={{ ...styles.td, textAlign: "center", color: "#94A3B8" }}>No hay mantenciones programadas.</td></tr>}
+          </tbody>
+        </table>
+      </div>
+      </>)}
     </div>
   )
 }

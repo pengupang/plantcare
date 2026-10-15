@@ -1,214 +1,172 @@
-import { useState } from "react"
-import { Pencil, Trash2, Plus, X, Check, AlertTriangle } from "lucide-react"
+import { useCallback, useMemo, useState } from "react"
+import { Pencil, Trash2, Plus, AlertTriangle, Search } from "lucide-react"
+import { insumos as api, proveedores as proveedoresApi } from "../services/lecheria"
+import useCarga from "../lib/useCarga"
+import { clp } from "../lib/formato"
+import EstadoCarga from "../components/EstadoCarga"
+import ModalLecheria, { Campo } from "../components/ModalLecheria"
+import s from "./estilosLecheria"
 
-const proveedoresDisponibles = ["Agro Insumos Sur", "Veterinaria del Campo", "FertiSur Ltda.", "Otro"]
-
-const initialData = [
-  { id: 1, nombre: "Heno de alfalfa", stock: 2, minimo: 5, unidad: "fardos", proveedor: "Agro Insumos Sur", precio: 8500 },
-  { id: 2, nombre: "Sal mineral", stock: 1, minimo: 3, unidad: "sacos", proveedor: "Agro Insumos Sur", precio: 12000 },
-  { id: 3, nombre: "Vitamina ADE", stock: 0, minimo: 2, unidad: "litros", proveedor: "Veterinaria del Campo", precio: 25000 },
-  { id: 4, nombre: "Maíz molido", stock: 8, minimo: 4, unidad: "sacos", proveedor: "Agro Insumos Sur", precio: 18000 },
-  { id: 5, nombre: "Melaza", stock: 3, minimo: 2, unidad: "litros", proveedor: "Agro Insumos Sur", precio: 5000 },
-]
-
-const emptyRow = { nombre: "", stock: 0, minimo: 0, unidad: "kg", proveedor: proveedoresDisponibles[0], precio: 0 }
+const UNIDADES_BASE = ["kg", "litros", "sacos", "fardos", "pacas", "toneladas", "dosis", "frascos", "unidades", "cajas"]
+const vacio = { nombre: "", stock: 0, minimo: 0, unidad: "kg", proveedor_id: "", precio: 0, categoria: "" }
 
 const getStockStatus = (stock, minimo) => {
-  if (stock === 0) return { bg: "#FEE2E2", color: "#991B1B", label: "Sin stock" }
-  if (stock <= minimo) return { bg: "#FEF3C7", color: "#92400E", label: "Stock bajo" }
+  if (Number(stock) === 0) return { bg: "#FEE2E2", color: "#991B1B", label: "Sin stock" }
+  if (Number(stock) <= Number(minimo)) return { bg: "#FEF3C7", color: "#92400E", label: "Stock bajo" }
   return { bg: "#D1FAE5", color: "#065F46", label: "OK" }
 }
 
 export default function VistaComidas() {
-  const [items, setItems] = useState(initialData)
-  const [editId, setEditId] = useState(null)
-  const [editData, setEditData] = useState({})
-  const [showAdd, setShowAdd] = useState(false)
-  const [newRow, setNewRow] = useState(emptyRow)
+  const cargarTodo = useCallback(async () => {
+    const [items, proveedores] = await Promise.all([api.listar(), proveedoresApi.listar()])
+    return { items, proveedores }
+  }, [])
+  const { datos, cargando, error, setError, recargar } = useCarga(cargarTodo, { items: [], proveedores: [] })
+  const { items, proveedores } = datos
 
-  const startEdit = (item) => { setEditId(item.id); setEditData({ ...item }) }
-  const cancelEdit = () => { setEditId(null); setEditData({}) }
-  const saveEdit = () => {
-    setItems(items.map(item => item.id === editId ? editData : item))
-    cancelEdit()
-  }
-  const deleteRow = (id) => setItems(items.filter(item => item.id !== id))
-  const addRow = () => {
-    setItems([...items, { ...newRow, id: Date.now() }])
-    setNewRow(emptyRow)
-    setShowAdd(false)
+  const [q, setQ] = useState("")
+  const [fCategoria, setFCategoria] = useState("")
+  const [soloAlertas, setSoloAlertas] = useState(false)
+  const [modal, setModal] = useState(null)
+  const [modalError, setModalError] = useState(null)
+  const [guardando, setGuardando] = useState(false)
+
+  const campo = (k, v) => setModal((m) => ({ ...m, [k]: v }))
+  const nombreProveedor = (id) => proveedores.find((p) => p.id === id)?.nombre ?? "—"
+  const categorias = useMemo(() => [...new Set(items.map((i) => i.categoria).filter(Boolean))].sort(), [items])
+  const unidades = useMemo(() => [...new Set([...UNIDADES_BASE, ...items.map((i) => i.unidad)])], [items])
+
+  const alertas = items.filter((i) => Number(i.stock) <= Number(i.minimo))
+  const filtrados = items.filter((i) => {
+    const t = q.trim().toLowerCase()
+    return (!t || i.nombre.toLowerCase().includes(t)) && (!fCategoria || i.categoria === fCategoria) && (!soloAlertas || Number(i.stock) <= Number(i.minimo))
+  })
+
+  const guardar = async () => {
+    if (!modal.nombre.trim()) return setModalError("El nombre es obligatorio")
+    if (Number(modal.stock) < 0 || Number(modal.minimo) < 0 || Number(modal.precio) < 0)
+      return setModalError("Stock, mínimo y precio no pueden ser negativos")
+    const payload = {
+      nombre: modal.nombre.trim(),
+      stock: Number(modal.stock) || 0,
+      minimo: Number(modal.minimo) || 0,
+      unidad: modal.unidad,
+      proveedor_id: modal.proveedor_id === "" || modal.proveedor_id === null ? null : Number(modal.proveedor_id),
+      precio: Math.round(Number(modal.precio) || 0),
+      categoria: modal.categoria?.trim() || null,
+    }
+    try {
+      setGuardando(true)
+      setModalError(null)
+      if (modal.id) await api.actualizar(modal.id, payload)
+      else await api.crear(payload)
+      setModal(null)
+      await recargar()
+    } catch (e) {
+      setModalError(e.message)
+    } finally {
+      setGuardando(false)
+    }
   }
 
-  const alertas = items.filter(i => i.stock <= i.minimo)
+  const eliminar = async (i) => {
+    if (!window.confirm(`¿Eliminar "${i.nombre}"?`)) return
+    try { await api.eliminar(i.id); await recargar() } catch (e) { setError(e.message) }
+  }
 
   return (
-    <div style={styles.container}>
-      <div style={styles.topBar}>
+    <div style={s.container}>
+      <div style={s.topBar}>
         <div>
-          <h2 style={styles.title}>Comidas y Alimentos</h2>
-          <p style={styles.sub}>{items.length} productos · {alertas.length} alertas de stock</p>
+          <h2 style={s.title}>Comidas y Alimentos</h2>
+          <p style={s.sub}>{items.length} productos · {alertas.length} alertas de stock</p>
         </div>
-        <button style={styles.btnAdd} onClick={() => setShowAdd(true)}>
+        <button style={s.btnAdd} onClick={() => { setModalError(null); setModal({ ...vacio }) }}>
           <Plus size={15} /> Agregar producto
         </button>
       </div>
 
-      {/* Alertas */}
       {alertas.length > 0 && (
-        <div style={styles.alertBox}>
+        <div style={s.alertBox}>
           <AlertTriangle size={16} color="#D97706" />
-          <span style={styles.alertText}>
-            <strong>{alertas.length} producto(s)</strong> con stock bajo o sin stock: {alertas.map(a => a.nombre).join(", ")}
+          <span>
+            <strong>{alertas.length} producto(s)</strong> con stock bajo o sin stock: {alertas.slice(0, 6).map((a) => a.nombre).join(", ")}
+            {alertas.length > 6 ? `… y ${alertas.length - 6} más` : ""}
           </span>
         </div>
       )}
 
-      {/* Modal agregar */}
-      {showAdd && (
-        <div style={styles.modalOverlay}>
-          <div style={styles.modal}>
-            <div style={styles.modalHeader}>
-              <h3 style={styles.modalTitle}>Nuevo producto</h3>
-              <button style={styles.iconBtn} onClick={() => setShowAdd(false)}><X size={16} /></button>
-            </div>
-            <div style={styles.formGrid}>
-              <div>
-                <label style={styles.label}>Nombre</label>
-                <input style={styles.input} value={newRow.nombre}
-                  onChange={e => setNewRow({ ...newRow, nombre: e.target.value })} />
-              </div>
-              <div>
-                <label style={styles.label}>Unidad</label>
-                <select style={styles.input} value={newRow.unidad}
-                  onChange={e => setNewRow({ ...newRow, unidad: e.target.value })}>
-                  {["kg", "litros", "sacos", "fardos", "unidades", "cajas"].map(u => <option key={u}>{u}</option>)}
-                </select>
-              </div>
-              <div>
-                <label style={styles.label}>Stock actual</label>
-                <input style={styles.input} type="number" value={newRow.stock}
-                  onChange={e => setNewRow({ ...newRow, stock: Number(e.target.value) })} />
-              </div>
-              <div>
-                <label style={styles.label}>Stock mínimo</label>
-                <input style={styles.input} type="number" value={newRow.minimo}
-                  onChange={e => setNewRow({ ...newRow, minimo: Number(e.target.value) })} />
-              </div>
-              <div>
-                <label style={styles.label}>Proveedor</label>
-                <select style={styles.input} value={newRow.proveedor}
-                  onChange={e => setNewRow({ ...newRow, proveedor: e.target.value })}>
-                  {proveedoresDisponibles.map(p => <option key={p}>{p}</option>)}
-                </select>
-              </div>
-              <div>
-                <label style={styles.label}>Precio unitario (CLP)</label>
-                <input style={styles.input} type="number" value={newRow.precio}
-                  onChange={e => setNewRow({ ...newRow, precio: Number(e.target.value) })} />
-              </div>
-            </div>
-            <div style={styles.modalFooter}>
-              <button style={styles.btnCancel} onClick={() => setShowAdd(false)}>Cancelar</button>
-              <button style={styles.btnSave} onClick={addRow}>Guardar</button>
-            </div>
-          </div>
+      <div style={s.filtros}>
+        <div style={s.buscador}>
+          <Search size={14} color="#94A3B8" />
+          <input style={s.buscadorInput} placeholder="Buscar producto..." value={q} onChange={(e) => setQ(e.target.value)} />
+        </div>
+        <select style={s.select} value={fCategoria} onChange={(e) => setFCategoria(e.target.value)}>
+          <option value="">Todas las categorías</option>
+          {categorias.map((c) => <option key={c}>{c}</option>)}
+        </select>
+        <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, color: "#64748B" }}>
+          <input type="checkbox" checked={soloAlertas} onChange={(e) => setSoloAlertas(e.target.checked)} /> Solo alertas
+        </label>
+      </div>
+
+      <EstadoCarga cargando={cargando} error={error} onReintentar={recargar} />
+
+      {!cargando && !error && (
+        <div style={s.tableCard}>
+          <table style={s.table}>
+            <thead>
+              <tr>{["Producto", "Stock actual", "Mínimo", "Unidad", "Proveedor", "Precio unit.", "Estado", ""].map((h) => <th key={h} style={s.th}>{h}</th>)}</tr>
+            </thead>
+            <tbody>
+              {filtrados.map((item, i) => {
+                const st = getStockStatus(item.stock, item.minimo)
+                return (
+                  <tr key={item.id} style={{ backgroundColor: i % 2 === 0 ? "#F8FAFC" : "#fff" }}>
+                    <td style={s.td}><span style={s.nombre}>{item.nombre}</span>{item.categoria && <span style={{ display: "block", fontSize: 11, color: "#94A3B8" }}>{item.categoria}</span>}</td>
+                    <td style={s.td}><span style={{ fontWeight: 600, color: Number(item.stock) === 0 ? "#EF4444" : "#1E293B" }}>{Number(item.stock).toLocaleString("es-CL")}</span></td>
+                    <td style={s.td}>{Number(item.minimo).toLocaleString("es-CL")}</td>
+                    <td style={s.td}>{item.unidad}</td>
+                    <td style={s.td}>{nombreProveedor(item.proveedor_id)}</td>
+                    <td style={s.td}>{clp(item.precio)}</td>
+                    <td style={s.td}><span style={{ ...s.badge, backgroundColor: st.bg, color: st.color }}>{st.label}</span></td>
+                    <td style={s.td}>
+                      <div style={s.actions}>
+                        <button style={s.iconBtnGreen} title="Editar" onClick={() => { setModalError(null); setModal({ ...item, proveedor_id: item.proveedor_id ?? "", categoria: item.categoria ?? "" }) }}><Pencil size={14} /></button>
+                        <button style={s.iconBtnRed} title="Eliminar" onClick={() => eliminar(item)}><Trash2 size={14} /></button>
+                      </div>
+                    </td>
+                  </tr>
+                )
+              })}
+              {filtrados.length === 0 && <tr><td colSpan={8} style={s.vacio}>No hay productos que coincidan.</td></tr>}
+            </tbody>
+          </table>
         </div>
       )}
 
-      {/* Tabla */}
-      <div style={styles.tableCard}>
-        <table style={styles.table}>
-          <thead>
-            <tr>
-              {["Producto", "Stock actual", "Mínimo", "Unidad", "Proveedor", "Precio unit.", "Estado", ""].map(h => (
-                <th key={h} style={styles.th}>{h}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {items.map((item, i) => {
-              const status = getStockStatus(item.stock, item.minimo)
-              return (
-                <tr key={item.id} style={{ backgroundColor: i % 2 === 0 ? "#F8FAFC" : "#ffffff" }}>
-                  {editId === item.id ? (
-                    <>
-                      <td style={styles.td}><input style={styles.inlineInput} value={editData.nombre} onChange={e => setEditData({ ...editData, nombre: e.target.value })} /></td>
-                      <td style={styles.td}><input style={styles.inlineInput} type="number" value={editData.stock} onChange={e => setEditData({ ...editData, stock: Number(e.target.value) })} /></td>
-                      <td style={styles.td}><input style={styles.inlineInput} type="number" value={editData.minimo} onChange={e => setEditData({ ...editData, minimo: Number(e.target.value) })} /></td>
-                      <td style={styles.td}>
-                        <select style={styles.inlineInput} value={editData.unidad} onChange={e => setEditData({ ...editData, unidad: e.target.value })}>
-                          {["kg", "litros", "sacos", "fardos", "unidades", "cajas"].map(u => <option key={u}>{u}</option>)}
-                        </select>
-                      </td>
-                      <td style={styles.td}>
-                        <select style={styles.inlineInput} value={editData.proveedor} onChange={e => setEditData({ ...editData, proveedor: e.target.value })}>
-                          {proveedoresDisponibles.map(p => <option key={p}>{p}</option>)}
-                        </select>
-                      </td>
-                      <td style={styles.td}><input style={styles.inlineInput} type="number" value={editData.precio} onChange={e => setEditData({ ...editData, precio: Number(e.target.value) })} /></td>
-                      <td style={styles.td} />
-                      <td style={styles.td}>
-                        <div style={styles.actions}>
-                          <button style={styles.iconBtnGreen} onClick={saveEdit}><Check size={14} /></button>
-                          <button style={styles.iconBtnGray} onClick={cancelEdit}><X size={14} /></button>
-                        </div>
-                      </td>
-                    </>
-                  ) : (
-                    <>
-                      <td style={styles.td}><span style={styles.nombre}>{item.nombre}</span></td>
-                      <td style={styles.td}><span style={{ fontWeight: 600, color: item.stock === 0 ? "#EF4444" : "#1E293B" }}>{item.stock}</span></td>
-                      <td style={styles.td}>{item.minimo}</td>
-                      <td style={styles.td}>{item.unidad}</td>
-                      <td style={styles.td}>{item.proveedor}</td>
-                      <td style={styles.td}>${Number(item.precio).toLocaleString("es-CL")}</td>
-                      <td style={styles.td}><span style={{ ...styles.badge, backgroundColor: status.bg, color: status.color }}>{status.label}</span></td>
-                      <td style={styles.td}>
-                        <div style={styles.actions}>
-                          <button style={styles.iconBtnGreen} onClick={() => startEdit(item)}><Pencil size={14} /></button>
-                          <button style={styles.iconBtnRed} onClick={() => deleteRow(item.id)}><Trash2 size={14} /></button>
-                        </div>
-                      </td>
-                    </>
-                  )}
-                </tr>
-              )
-            })}
-          </tbody>
-        </table>
-      </div>
+      {modal && (
+        <ModalLecheria titulo={modal.id ? "Editar producto" : "Nuevo producto"} onClose={() => setModal(null)} onSave={guardar} error={modalError} guardando={guardando}>
+          <Campo label="Nombre" full><input style={s.input} value={modal.nombre} onChange={(e) => campo("nombre", e.target.value)} /></Campo>
+          <Campo label="Categoría"><input style={s.input} list="categorias-insumo" value={modal.categoria} onChange={(e) => campo("categoria", e.target.value)} />
+            <datalist id="categorias-insumo">{categorias.map((c) => <option key={c} value={c} />)}</datalist>
+          </Campo>
+          <Campo label="Unidad">
+            <select style={s.input} value={modal.unidad} onChange={(e) => campo("unidad", e.target.value)}>
+              {unidades.map((u) => <option key={u}>{u}</option>)}
+            </select>
+          </Campo>
+          <Campo label="Stock actual"><input style={s.input} type="number" min="0" step="any" value={modal.stock} onChange={(e) => campo("stock", e.target.value)} /></Campo>
+          <Campo label="Stock mínimo"><input style={s.input} type="number" min="0" step="any" value={modal.minimo} onChange={(e) => campo("minimo", e.target.value)} /></Campo>
+          <Campo label="Proveedor">
+            <select style={s.input} value={modal.proveedor_id} onChange={(e) => campo("proveedor_id", e.target.value)}>
+              <option value="">Sin proveedor</option>
+              {proveedores.map((p) => <option key={p.id} value={p.id}>{p.nombre}</option>)}
+            </select>
+          </Campo>
+          <Campo label="Precio unitario (CLP)"><input style={s.input} type="number" min="0" value={modal.precio} onChange={(e) => campo("precio", e.target.value)} /></Campo>
+        </ModalLecheria>
+      )}
     </div>
   )
-}
-
-const styles = {
-  container: { display: "flex", flexDirection: "column", gap: "20px" },
-  topBar: { display: "flex", justifyContent: "space-between", alignItems: "flex-start" },
-  title: { fontSize: "18px", fontWeight: 700, color: "#1E293B", margin: 0 },
-  sub: { fontSize: "13px", color: "#94A3B8", margin: "4px 0 0 0" },
-  btnAdd: { display: "flex", alignItems: "center", gap: "6px", padding: "8px 16px", backgroundColor: "#3D6B4F", border: "none", borderRadius: "6px", color: "#fff", fontSize: "13px", fontWeight: 600, cursor: "pointer" },
-  alertBox: { display: "flex", alignItems: "center", gap: "10px", padding: "12px 16px", backgroundColor: "#FFFBEB", border: "1px solid #FCD34D", borderRadius: "8px" },
-  alertText: { fontSize: "13px", color: "#92400E" },
-  tableCard: { backgroundColor: "#fff", borderRadius: "10px", border: "1px solid #E2E8F0", overflow: "hidden" },
-  table: { width: "100%", borderCollapse: "collapse" },
-  th: { textAlign: "left", fontSize: "11px", fontWeight: 600, color: "#94A3B8", padding: "12px 16px", borderBottom: "1px solid #E2E8F0", textTransform: "uppercase", letterSpacing: "0.05em", backgroundColor: "#F8FAFC" },
-  td: { padding: "12px 16px", fontSize: "13px", color: "#334155", borderBottom: "1px solid #F1F5F9", verticalAlign: "middle" },
-  nombre: { fontWeight: 600, color: "#1E293B" },
-  badge: { padding: "3px 10px", borderRadius: "20px", fontSize: "12px", fontWeight: 500 },
-  actions: { display: "flex", gap: "6px" },
-  iconBtn: { background: "none", border: "none", cursor: "pointer", padding: "4px", color: "#64748B" },
-  iconBtnGreen: { background: "#D1FAE5", border: "none", cursor: "pointer", padding: "6px", borderRadius: "4px", color: "#065F46" },
-  iconBtnGray: { background: "#F1F5F9", border: "none", cursor: "pointer", padding: "6px", borderRadius: "4px", color: "#64748B" },
-  iconBtnRed: { background: "#FEE2E2", border: "none", cursor: "pointer", padding: "6px", borderRadius: "4px", color: "#991B1B" },
-  inlineInput: { width: "100%", padding: "5px 8px", border: "1px solid #CBD5E1", borderRadius: "4px", fontSize: "13px", boxSizing: "border-box" },
-  modalOverlay: { position: "fixed", inset: 0, backgroundColor: "rgba(0,0,0,0.4)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100 },
-  modal: { backgroundColor: "#fff", borderRadius: "12px", padding: "24px", width: "100%", maxWidth: "480px", boxShadow: "0 20px 40px rgba(0,0,0,0.15)" },
-  modalHeader: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" },
-  modalTitle: { fontSize: "16px", fontWeight: 700, color: "#1E293B", margin: 0 },
-  modalFooter: { display: "flex", justifyContent: "flex-end", gap: "10px", marginTop: "20px" },
-  formGrid: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" },
-  label: { display: "block", fontSize: "11px", fontWeight: 600, color: "#64748B", marginBottom: "6px", textTransform: "uppercase", letterSpacing: "0.04em" },
-  input: { width: "100%", padding: "9px 12px", border: "1px solid #E2E8F0", borderRadius: "6px", fontSize: "13px", boxSizing: "border-box", backgroundColor: "#F8FAFC" },
-  btnCancel: { padding: "8px 16px", backgroundColor: "transparent", border: "1px solid #E2E8F0", borderRadius: "6px", color: "#64748B", fontSize: "13px", cursor: "pointer" },
-  btnSave: { padding: "8px 20px", backgroundColor: "#3D6B4F", border: "none", borderRadius: "6px", color: "#fff", fontSize: "13px", fontWeight: 600, cursor: "pointer" },
 }

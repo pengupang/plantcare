@@ -1,72 +1,90 @@
-import { useState } from "react"
-import { DollarSign, TrendingUp, Wrench, Users, Search } from "lucide-react"
+import { useMemo, useState } from "react"
+import { DollarSign, TrendingUp, Users, Search } from "lucide-react"
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, LineChart, Line } from "recharts"
+import { facturas as api } from "../services/maquinaria"
+import useCarga from "../lib/useCarga"
+import { clp, fechaCL, MESES_CORTO } from "../lib/formato"
+import EstadoCarga from "../components/EstadoCarga"
+import { ESTADO_FACTURA } from "./estilosMaquinaria"
 
-const MESES = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"]
+const POR_PAGINA = 100
+const nombreMaq = (f) => `${f.arriendo?.maquina?.nombre ?? ""} ${f.arriendo?.maquina?.modelo ?? ""}`.trim()
 
-const datos = [
-  { mes:"Ene", ingresos:1850000, arriendos:8 },
-  { mes:"Feb", ingresos:2100000, arriendos:10 },
-  { mes:"Mar", ingresos:1650000, arriendos:7 },
-  { mes:"Abr", ingresos:2400000, arriendos:12 },
-  { mes:"May", ingresos:2200000, arriendos:11 },
-  { mes:"Jun", ingresos:1900000, arriendos:9 },
-  { mes:"Jul", ingresos:2050000, arriendos:10 },
-  { mes:"Ago", ingresos:2350000, arriendos:11 },
-  { mes:"Sep", ingresos:1780000, arriendos:8 },
-  { mes:"Oct", ingresos:1240000, arriendos:6 },
-]
-
-const topServicios = [
-  { nombre:"Labranza agrícola", total:8500000, arriendos:12 },
-  { nombre:"Movimiento de tierra", total:6200000, arriendos:9 },
-  { nombre:"Cosecha", total:4800000, arriendos:4 },
-  { nombre:"Carga y transporte", total:2250000, arriendos:6 },
-]
-
-const topMaquinas = [
-  { nombre:"Tractor New Holland T6", total:7800000, arriendos:14 },
-  { nombre:"Retroexcavadora CAT 320", total:6100000, arriendos:10 },
-  { nombre:"Cosechadora John Deere S760", total:4800000, arriendos:4 },
-  { nombre:"Minicargador Bobcat S570", total:3020000, arriendos:8 },
-]
-
-const registros = [
-  { id:1, fecha:"2026-10-07", cliente:"Campo Verde SpA", maquina:"Cosechadora John Deere S760", servicio:"Cosecha", monto:2000000, pagado:false },
-  { id:2, fecha:"2026-10-05", cliente:"Agro Sur Ltda.", maquina:"Tractor New Holland T6", servicio:"Labranza agrícola", monto:850000, pagado:false },
-  { id:3, fecha:"2026-10-01", cliente:"Juan Pérez", maquina:"Retroexcavadora CAT 320", servicio:"Movimiento de tierra", monto:1200000, pagado:true },
-  { id:4, fecha:"2026-09-28", cliente:"Pedro Soto", maquina:"Minicargador Bobcat S570", servicio:"Carga y transporte", monto:750000, pagado:true },
-  { id:5, fecha:"2026-09-15", cliente:"Agro Sur Ltda.", maquina:"Tractor New Holland T6", servicio:"Labranza agrícola", monto:920000, pagado:true },
-  { id:6, fecha:"2026-08-20", cliente:"Campo Verde SpA", maquina:"Tractor New Holland T6", servicio:"Labranza agrícola", monto:870000, pagado:true },
-]
+// Suma neto y cantidad de facturas agrupadas por una clave; devuelve lista ordenada de mayor a menor
+const ranking = (lista, clave) => {
+  const acc = {}
+  for (const f of lista) {
+    const k = clave(f) || "—"
+    acc[k] ??= { nombre: k, total: 0, arriendos: 0 }
+    acc[k].total += Number(f.neto)
+    acc[k].arriendos += 1
+  }
+  return Object.values(acc).sort((a, b) => b.total - a.total).slice(0, 5)
+}
 
 export default function VistaFacturacion() {
+  const { datos: facturas, cargando, error, recargar } = useCarga(api.listar, [])
+  const hoy = new Date()
+  const [anio, setAnio] = useState(String(hoy.getFullYear()))
   const [busqueda, setBusqueda] = useState("")
+  const [limite, setLimite] = useState(POR_PAGINA)
 
-  const totalAnual = datos.reduce((s,d)=>s+d.ingresos,0)
-  const totalMes = datos[datos.length-1].ingresos
-  const totalPendiente = registros.filter(r=>!r.pagado).reduce((s,r)=>s+r.monto,0)
-  const totalClientes = [...new Set(registros.map(r=>r.cliente))].length
+  const anios = useMemo(() => {
+    const a = new Set(facturas.map((f) => f.fecha_emision.slice(0, 4)))
+    a.add(String(hoy.getFullYear()))
+    return [...a].sort().reverse()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [facturas])
 
-  const registrosFiltrados = registros.filter(r =>
-    r.cliente.toLowerCase().includes(busqueda.toLowerCase()) ||
-    r.maquina.toLowerCase().includes(busqueda.toLowerCase()) ||
-    r.servicio.toLowerCase().includes(busqueda.toLowerCase())
+  const delAnio = useMemo(() => facturas.filter((f) => f.fecha_emision.startsWith(anio)), [facturas, anio])
+
+  const datos = useMemo(
+    () =>
+      MESES_CORTO.map((mes, i) => {
+        const mm = String(i + 1).padStart(2, "0")
+        const f = delAnio.filter((x) => x.fecha_emision.slice(5, 7) === mm)
+        return { mes, ingresos: f.reduce((t, x) => t + Number(x.neto), 0), arriendos: f.length }
+      }),
+    [delAnio]
   )
+
+  const esAnioActual = anio === String(hoy.getFullYear())
+  const totalAnual = datos.reduce((t, d) => t + d.ingresos, 0)
+  const mesesConDatos = datos.filter((d) => d.ingresos > 0).length
+  const kpiMes = esAnioActual ? datos[hoy.getMonth()].ingresos : mesesConDatos ? totalAnual / mesesConDatos : 0
+  const porCobrar = facturas.filter((f) => f.estado !== "Pagada").reduce((t, f) => t + Number(f.total), 0)
+  const vencidas = facturas.filter((f) => f.estado === "Vencida").reduce((t, f) => t + Number(f.total), 0)
+  const totalClientes = new Set(delAnio.map((f) => f.cliente_id)).size
+
+  const topServicios = useMemo(() => ranking(delAnio, (f) => f.arriendo?.servicio?.nombre), [delAnio])
+  const topMaquinas = useMemo(() => ranking(delAnio, nombreMaq), [delAnio])
+
+  const registrosFiltrados = useMemo(() => {
+    const t = busqueda.trim().toLowerCase()
+    return delAnio.filter(
+      (f) => !t || `${f.cliente?.nombre} ${nombreMaq(f)} ${f.arriendo?.servicio?.nombre} ${f.numero}`.toLowerCase().includes(t)
+    )
+  }, [delAnio, busqueda])
 
   return (
     <div style={styles.container}>
       <div style={styles.topBar}>
-        <div><h2 style={styles.title}>Facturación e Inteligencia de Negocio</h2><p style={styles.sub}>Resumen financiero del año 2026</p></div>
+        <div><h2 style={styles.title}>Facturación e Inteligencia de Negocio</h2><p style={styles.sub}>Resumen financiero del año {anio} · montos netos (sin IVA) salvo donde se indica</p></div>
+        <select style={styles.select} value={anio} onChange={(e) => { setAnio(e.target.value); setLimite(POR_PAGINA) }}>
+          {anios.map((a) => <option key={a} value={a}>{a}</option>)}
+        </select>
       </div>
 
+      <EstadoCarga cargando={cargando} error={error} onReintentar={recargar} />
+
+      {!cargando && !error && (<>
       {/* KPIs */}
       <div style={styles.kpiGrid}>
         {[
-          { label:"Ingresos totales 2026", value:`$${totalAnual.toLocaleString("es-CL")}`, icon:DollarSign, bg:"#D1FAE5", color:"#065F46" },
-          { label:"Ingresos este mes", value:`$${totalMes.toLocaleString("es-CL")}`, icon:TrendingUp, bg:"#DBEAFE", color:"#1D4ED8" },
-          { label:"Por cobrar", value:`$${totalPendiente.toLocaleString("es-CL")}`, icon:DollarSign, bg:"#FEF3C7", color:"#92400E" },
-          { label:"Clientes activos", value:totalClientes, icon:Users, bg:"#EDE9FE", color:"#7C3AED" },
+          { label:`Ingresos totales ${anio}`, value:clp(totalAnual), icon:DollarSign, bg:"#D1FAE5", color:"#065F46" },
+          { label:esAnioActual ? "Ingresos este mes" : "Promedio mensual", value:clp(kpiMes), icon:TrendingUp, bg:"#DBEAFE", color:"#1D4ED8" },
+          { label:`Por cobrar (con IVA)${vencidas ? ` · ${clp(vencidas)} vencido` : ""}`, value:clp(porCobrar), icon:DollarSign, bg:"#FEF3C7", color:"#92400E" },
+          { label:`Clientes facturados ${anio}`, value:totalClientes, icon:Users, bg:"#EDE9FE", color:"#7C3AED" },
         ].map(({label,value,icon:Icon,bg,color})=>(
           <div key={label} style={styles.kpiCard}>
             <div style={{...styles.kpiIcon,backgroundColor:bg}}><Icon size={18} color={color}/></div>
@@ -78,23 +96,23 @@ export default function VistaFacturacion() {
       {/* Gráficos */}
       <div style={styles.chartsRow}>
         <div style={styles.chartCard}>
-          <h3 style={styles.chartTitle}>Ingresos mensuales 2026</h3>
+          <h3 style={styles.chartTitle}>Ingresos mensuales {anio}</h3>
           <ResponsiveContainer width="100%" height={200}>
             <BarChart data={datos}>
               <XAxis dataKey="mes" tick={{fontSize:11}} />
               <YAxis tick={{fontSize:11}} tickFormatter={v=>`$${(v/1000000).toFixed(1)}M`} />
-              <Tooltip formatter={v=>[`$${v.toLocaleString("es-CL")}`, "Ingresos"]} />
+              <Tooltip formatter={v=>[clp(v), "Ingresos"]} />
               <Bar dataKey="ingresos" fill="#4A6FA5" radius={[4,4,0,0]} />
             </BarChart>
           </ResponsiveContainer>
         </div>
         <div style={styles.chartCard}>
-          <h3 style={styles.chartTitle}>Arriendos por mes</h3>
+          <h3 style={styles.chartTitle}>Facturas emitidas por mes</h3>
           <ResponsiveContainer width="100%" height={200}>
             <LineChart data={datos}>
               <XAxis dataKey="mes" tick={{fontSize:11}} />
-              <YAxis tick={{fontSize:11}} />
-              <Tooltip formatter={v=>[v, "Arriendos"]} />
+              <YAxis tick={{fontSize:11}} allowDecimals={false} />
+              <Tooltip formatter={v=>[v, "Facturas"]} />
               <Line type="monotone" dataKey="arriendos" stroke="#4A6FA5" strokeWidth={2} dot={{r:4}} />
             </LineChart>
           </ResponsiveContainer>
@@ -103,69 +121,69 @@ export default function VistaFacturacion() {
 
       {/* Top servicios y máquinas */}
       <div style={styles.topRow}>
-        <div style={styles.topCard}>
-          <h3 style={styles.chartTitle}>Top servicios</h3>
-          {topServicios.map((s,i)=>(
-            <div key={s.nombre} style={styles.topItem}>
-              <div style={styles.topRank}>#{i+1}</div>
-              <div style={{flex:1}}>
-                <div style={styles.topNombre}>{s.nombre}</div>
-                <div style={styles.topBar2}>
-                  <div style={{...styles.topBarFill, width:`${(s.total/topServicios[0].total)*100}%`, backgroundColor:"#4A6FA5"}} />
+        {[["Top servicios", topServicios, "#4A6FA5"], ["Top maquinaria", topMaquinas, "#1B2A4A"]].map(([titulo, lista, color]) => (
+          <div key={titulo} style={styles.topCard}>
+            <h3 style={styles.chartTitle}>{titulo}</h3>
+            {lista.length === 0 && <p style={{fontSize:13,color:"#94A3B8"}}>Sin facturas en {anio}</p>}
+            {lista.map((x,i)=>(
+              <div key={x.nombre} style={styles.topItem}>
+                <div style={styles.topRank}>#{i+1}</div>
+                <div style={{flex:1}}>
+                  <div style={styles.topNombre}>{x.nombre} <span style={{color:"#94A3B8",fontWeight:400}}>· {x.arriendos} trabajos</span></div>
+                  <div style={styles.topBar2}>
+                    <div style={{...styles.topBarFill, width:`${(x.total/lista[0].total)*100}%`, backgroundColor:color}} />
+                  </div>
                 </div>
+                <div style={styles.topMonto}>${(x.total/1000000).toFixed(1)}M</div>
               </div>
-              <div style={styles.topMonto}>${(s.total/1000000).toFixed(1)}M</div>
-            </div>
-          ))}
-        </div>
-        <div style={styles.topCard}>
-          <h3 style={styles.chartTitle}>Top maquinaria</h3>
-          {topMaquinas.map((m,i)=>(
-            <div key={m.nombre} style={styles.topItem}>
-              <div style={styles.topRank}>#{i+1}</div>
-              <div style={{flex:1}}>
-                <div style={styles.topNombre}>{m.nombre}</div>
-                <div style={styles.topBar2}>
-                  <div style={{...styles.topBarFill, width:`${(m.total/topMaquinas[0].total)*100}%`, backgroundColor:"#1B2A4A"}} />
-                </div>
-              </div>
-              <div style={styles.topMonto}>${(m.total/1000000).toFixed(1)}M</div>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        ))}
       </div>
 
       {/* Tabla con búsqueda */}
       <div style={styles.tableCard}>
         <div style={styles.tableTopBar}>
-          <h3 style={styles.chartTitle}>Detalle de transacciones</h3>
+          <h3 style={styles.chartTitle}>Facturas {anio} ({registrosFiltrados.length})</h3>
           <div style={styles.searchBox}>
             <Search size={14} color="#94A3B8" />
-            <input style={styles.searchInput} placeholder="Buscar cliente, máquina o servicio..."
-              value={busqueda} onChange={e=>setBusqueda(e.target.value)} />
+            <input style={styles.searchInput} placeholder="Buscar cliente, máquina, servicio o N°..."
+              value={busqueda} onChange={e=>{ setBusqueda(e.target.value); setLimite(POR_PAGINA) }} />
           </div>
         </div>
         <table style={styles.table}>
-          <thead><tr>{["Fecha","Cliente","Máquina","Servicio","Monto","Estado"].map(h=><th key={h} style={styles.th}>{h}</th>)}</tr></thead>
+          <thead><tr>{["Emisión","N°","Cliente","Máquina","Servicio","Neto","Total c/IVA","Estado"].map(h=><th key={h} style={styles.th}>{h}</th>)}</tr></thead>
           <tbody>
-            {registrosFiltrados.map((r,i)=>(
-              <tr key={r.id} style={{backgroundColor:i%2===0?"#F8FAFC":"#fff"}}>
-                <td style={styles.td}>{r.fecha}</td>
-                <td style={styles.td}>{r.cliente}</td>
-                <td style={{...styles.td,fontSize:"12px"}}>{r.maquina}</td>
-                <td style={styles.td}>{r.servicio}</td>
-                <td style={{...styles.td,fontWeight:600}}>${r.monto.toLocaleString("es-CL")}</td>
-                <td style={styles.td}><span style={{padding:"3px 10px",borderRadius:"20px",fontSize:"12px",fontWeight:500,backgroundColor:r.pagado?"#D1FAE5":"#FEF3C7",color:r.pagado?"#065F46":"#92400E"}}>{r.pagado?"Pagado":"Pendiente"}</span></td>
+            {registrosFiltrados.slice(0, limite).map((f,i)=>(
+              <tr key={f.id} style={{backgroundColor:i%2===0?"#F8FAFC":"#fff"}}>
+                <td style={styles.td}>{fechaCL(f.fecha_emision)}</td>
+                <td style={styles.td}>{f.numero}</td>
+                <td style={styles.td}>{f.cliente?.nombre}</td>
+                <td style={{...styles.td,fontSize:"12px"}}>{nombreMaq(f)}</td>
+                <td style={styles.td}>{f.arriendo?.servicio?.nombre}</td>
+                <td style={{...styles.td,fontWeight:600}}>{clp(f.neto)}</td>
+                <td style={styles.td}>{clp(f.total)}</td>
+                <td style={styles.td}><span style={{padding:"3px 10px",borderRadius:"20px",fontSize:"12px",fontWeight:500,...ESTADO_FACTURA[f.estado]}}>{f.estado}</span></td>
               </tr>
             ))}
+            {registrosFiltrados.length === 0 && <tr><td colSpan={8} style={{...styles.td,textAlign:"center",color:"#94A3B8"}}>Sin facturas.</td></tr>}
           </tbody>
         </table>
+        {registrosFiltrados.length > limite && (
+          <div style={{padding:12,textAlign:"center"}}>
+            <button onClick={()=>setLimite(l=>l+POR_PAGINA)} style={{padding:"8px 16px",border:"1px solid #E2E8F0",borderRadius:6,background:"transparent",color:"#64748B",fontSize:13,cursor:"pointer"}}>
+              Ver más ({registrosFiltrados.length - limite} restantes)
+            </button>
+          </div>
+        )}
       </div>
+      </>)}
     </div>
   )
 }
 
 const styles = {
+  select:{padding:"8px 10px",border:"1px solid #E2E8F0",borderRadius:"6px",fontSize:"13px",backgroundColor:"#fff",color:"#334155"},
   container:{display:"flex",flexDirection:"column",gap:"20px"},
   topBar:{display:"flex",justifyContent:"space-between",alignItems:"flex-start"},
   title:{fontSize:"18px",fontWeight:700,color:"#1E293B",margin:0},

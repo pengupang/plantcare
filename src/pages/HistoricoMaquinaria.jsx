@@ -1,71 +1,85 @@
-import { useState } from "react"
+import { useMemo, useState } from "react"
 import { TrendingUp, TrendingDown, Minus } from "lucide-react"
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend } from "recharts"
+import { ingresosMensuales } from "../services/maquinaria"
+import useCarga from "../lib/useCarga"
+import { clp, MESES_CORTO as MESES } from "../lib/formato"
+import EstadoCarga from "../components/EstadoCarga"
 
-const MESES = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"]
+const suma = (v) => v.reduce((s, x) => s + x, 0)
+const diff = (actual, anterior) => (anterior ? ((actual - anterior) / anterior * 100).toFixed(1) : null)
 
-const datos2024 = [1200000,1450000,1100000,1800000,1650000,1400000,1550000,1700000,1300000,1450000,1600000,1900000]
-const datos2025 = [1550000,1800000,1400000,2100000,1950000,1700000,1850000,2050000,1600000,1750000,1900000,2200000]
-const datos2026 = [1850000,2100000,1650000,2400000,2200000,1900000,2050000,2350000,1780000,1240000,0,0]
-
-const [anioA, setAnioA] = [2026, () => {}]
-const [anioB, setAnioB] = [2025, () => {}]
-
-const datosMap = { 2024: datos2024, 2025: datos2025, 2026: datos2026 }
-
-const dataComparativa = MESES.map((mes, i) => ({
-  mes,
-  "2024": datos2024[i],
-  "2025": datos2025[i],
-  "2026": datos2026[i],
-})).filter(d => d["2026"] > 0 || d["2025"] > 0)
-
-const totalAnio = (datos) => datos.filter(v=>v>0).reduce((s,v)=>s+v,0)
-const promedioAnio = (datos) => { const f = datos.filter(v=>v>0); return f.reduce((s,v)=>s+v,0)/f.length }
-
-const diff = (actual, anterior) => {
-  if (!anterior) return null
-  return ((actual - anterior) / anterior * 100).toFixed(1)
+const DiffBadge = ({ val }) => {
+  if (val === null) return null
+  const n = parseFloat(val)
+  const up = n > 0
+  const eq = n === 0
+  return (
+    <span style={{display:"inline-flex",alignItems:"center",gap:"3px",padding:"2px 8px",borderRadius:"20px",fontSize:"12px",fontWeight:600,
+      backgroundColor: eq?"#F1F5F9":up?"#D1FAE5":"#FEE2E2",
+      color: eq?"#64748B":up?"#065F46":"#991B1B"}}>
+      {eq ? <Minus size={11}/> : up ? <TrendingUp size={11}/> : <TrendingDown size={11}/>}
+      {up?"+":""}{val}%
+    </span>
+  )
 }
 
 export default function VistaHistoricosMaquinaria() {
-  const [anio1, setAnio1] = useState(2026)
-  const [anio2, setAnio2] = useState(2025)
+  const { datos: filas, cargando, error, recargar } = useCarga(ingresosMensuales, [])
 
-  const total1 = totalAnio(datosMap[anio1])
-  const total2 = totalAnio(datosMap[anio2])
-  const prom1  = promedioAnio(datosMap[anio1])
-  const prom2  = promedioAnio(datosMap[anio2])
-  const diffTotal = diff(total1, total2)
-  const diffProm  = diff(prom1, prom2)
+  // { 2024: [12 valores], 2025: [...], ... } con ingresos netos de trabajos finalizados
+  const datosMap = useMemo(() => {
+    const m = {}
+    for (const f of filas) {
+      m[f.anio] ??= Array(12).fill(0)
+      m[f.anio][f.mes - 1] = Number(f.ingresos_neto)
+    }
+    return m
+  }, [filas])
+  const anios = useMemo(() => Object.keys(datosMap).map(Number).sort((a, b) => a - b), [datosMap])
 
-  const DiffBadge = ({ val }) => {
-    if (val === null) return null
-    const n = parseFloat(val)
-    const up = n > 0
-    const eq = n === 0
+  const [sel, setSel] = useState({ a1: null, a2: null })
+  // Por defecto: el último año con datos contra el anterior
+  const anio1 = sel.a1 ?? anios[anios.length - 1]
+  const anio2 = sel.a2 ?? anios[anios.length - 2] ?? anio1
+
+  if (cargando || error || anios.length === 0)
     return (
-      <span style={{display:"inline-flex",alignItems:"center",gap:"3px",padding:"2px 8px",borderRadius:"20px",fontSize:"12px",fontWeight:600,
-        backgroundColor: eq?"#F1F5F9":up?"#D1FAE5":"#FEE2E2",
-        color: eq?"#64748B":up?"#065F46":"#991B1B"}}>
-        {eq ? <Minus size={11}/> : up ? <TrendingUp size={11}/> : <TrendingDown size={11}/>}
-        {up?"+":""}{val}%
-      </span>
+      <div style={styles.container}>
+        <div style={styles.topBar}><div><h2 style={styles.title}>Datos Históricos</h2><p style={styles.sub}>Comparativa entre años</p></div></div>
+        <EstadoCarga cargando={cargando} error={error} onReintentar={recargar} />
+        {!cargando && !error && <p style={{fontSize:13,color:"#94A3B8"}}>Aún no hay trabajos finalizados para comparar.</p>}
+      </div>
     )
-  }
+
+  const d1 = datosMap[anio1] ?? Array(12).fill(0)
+  const d2 = datosMap[anio2] ?? Array(12).fill(0)
+
+  // Comparación justa: solo los meses en que el primer año tiene datos (ej. ene–oct si el año está en curso)
+  const meses = d1.map((v, i) => (v > 0 ? i : -1)).filter((i) => i >= 0)
+  const total1 = suma(meses.map((i) => d1[i]))
+  const total2 = suma(meses.map((i) => d2[i]))
+  const prom1 = meses.length ? total1 / meses.length : 0
+  const prom2 = meses.length ? total2 / meses.length : 0
+  const diffTotal = diff(total1, total2)
+  const diffProm = diff(prom1, prom2)
+  const maxV = Math.max(...d1)
+
+  const dataComparativa = MESES.map((mes, i) => ({ mes, [String(anio1)]: d1[i], [String(anio2)]: d2[i] }))
+    .filter((d) => d[String(anio1)] > 0 || d[String(anio2)] > 0)
 
   return (
     <div style={styles.container}>
       <div style={styles.topBar}>
-        <div><h2 style={styles.title}>Datos Históricos</h2><p style={styles.sub}>Comparativa entre años</p></div>
+        <div><h2 style={styles.title}>Datos Históricos</h2><p style={styles.sub}>Ingresos netos de trabajos finalizados · se comparan los mismos meses ({meses.length ? `${MESES[meses[0]]}–${MESES[meses[meses.length-1]]}` : "—"})</p></div>
         <div style={styles.anioSelector}>
           <span style={styles.anioLabel}>Comparar:</span>
-          <select style={styles.select} value={anio1} onChange={e=>setAnio1(Number(e.target.value))}>
-            {[2024,2025,2026].map(a=><option key={a}>{a}</option>)}
+          <select style={styles.select} value={anio1} onChange={e=>setSel({a1:Number(e.target.value),a2:anio2})}>
+            {anios.map(a=><option key={a}>{a}</option>)}
           </select>
           <span style={styles.anioLabel}>vs</span>
-          <select style={styles.select} value={anio2} onChange={e=>setAnio2(Number(e.target.value))}>
-            {[2024,2025,2026].map(a=><option key={a}>{a}</option>)}
+          <select style={styles.select} value={anio2} onChange={e=>setSel({a1:anio1,a2:Number(e.target.value)})}>
+            {anios.map(a=><option key={a}>{a}</option>)}
           </select>
         </div>
       </div>
@@ -73,7 +87,7 @@ export default function VistaHistoricosMaquinaria() {
       {/* Cards comparativas */}
       <div style={styles.cardsRow}>
         <div style={styles.compCard}>
-          <p style={styles.compLabel}>Ingresos totales</p>
+          <p style={styles.compLabel}>Ingresos del período</p>
           <div style={styles.compValues}>
             <div><span style={styles.compAnio}>{anio1}</span><span style={styles.compVal}>${(total1/1000000).toFixed(2)}M</span></div>
             <div style={styles.compDivider}/>
@@ -84,21 +98,21 @@ export default function VistaHistoricosMaquinaria() {
         <div style={styles.compCard}>
           <p style={styles.compLabel}>Promedio mensual</p>
           <div style={styles.compValues}>
-            <div><span style={styles.compAnio}>{anio1}</span><span style={styles.compVal}>${Math.round(prom1).toLocaleString("es-CL")}</span></div>
+            <div><span style={styles.compAnio}>{anio1}</span><span style={styles.compVal}>{clp(prom1)}</span></div>
             <div style={styles.compDivider}/>
-            <div><span style={styles.compAnio}>{anio2}</span><span style={styles.compVal}>${Math.round(prom2).toLocaleString("es-CL")}</span></div>
+            <div><span style={styles.compAnio}>{anio2}</span><span style={styles.compVal}>{clp(prom2)}</span></div>
           </div>
           <DiffBadge val={diffProm} />
         </div>
         <div style={styles.compCard}>
           <p style={styles.compLabel}>Mejor mes {anio1}</p>
-          <span style={styles.compVal}>{MESES[datosMap[anio1].indexOf(Math.max(...datosMap[anio1]))]}</span>
-          <p style={styles.compSub}>${Math.max(...datosMap[anio1]).toLocaleString("es-CL")}</p>
+          <span style={styles.compVal}>{maxV > 0 ? MESES[d1.indexOf(maxV)] : "—"}</span>
+          <p style={styles.compSub}>{clp(maxV)}</p>
         </div>
         <div style={styles.compCard}>
           <p style={styles.compLabel}>Crecimiento {anio1} vs {anio2}</p>
           <DiffBadge val={diffTotal} />
-          <p style={styles.compSub}>{parseFloat(diffTotal)>0?"Mejor que año anterior":"Por debajo del año anterior"}</p>
+          <p style={styles.compSub}>{diffTotal === null ? "Sin datos para comparar" : parseFloat(diffTotal)>0?"Mejor que el año comparado":"Por debajo del año comparado"}</p>
         </div>
       </div>
 
@@ -109,10 +123,10 @@ export default function VistaHistoricosMaquinaria() {
           <BarChart data={dataComparativa} barGap={4}>
             <XAxis dataKey="mes" tick={{fontSize:11}} />
             <YAxis tick={{fontSize:11}} tickFormatter={v=>`$${(v/1000000).toFixed(1)}M`} />
-            <Tooltip formatter={v=>[`$${v.toLocaleString("es-CL")}`]} />
+            <Tooltip formatter={v=>[clp(v)]} />
             <Legend wrapperStyle={{fontSize:12}} />
             <Bar dataKey={String(anio1)} fill="#1B2A4A" radius={[3,3,0,0]} />
-            <Bar dataKey={String(anio2)} fill="#7BA7D4" radius={[3,3,0,0]} />
+            {anio2 !== anio1 && <Bar dataKey={String(anio2)} fill="#7BA7D4" radius={[3,3,0,0]} />}
           </BarChart>
         </ResponsiveContainer>
       </div>
@@ -129,16 +143,16 @@ export default function VistaHistoricosMaquinaria() {
           </tr></thead>
           <tbody>
             {MESES.map((mes,i)=>{
-              const v1 = datosMap[anio1][i]
-              const v2 = datosMap[anio2][i]
+              const v1 = d1[i]
+              const v2 = d2[i]
               if (!v1 && !v2) return null
               const d = v1 && v2 ? diff(v1,v2) : null
               const dn = d ? parseFloat(d) : null
               return (
                 <tr key={mes} style={{backgroundColor:i%2===0?"#F8FAFC":"#fff"}}>
                   <td style={styles.td}>{mes}</td>
-                  <td style={{...styles.td,fontWeight:600}}>{v1 ? `$${v1.toLocaleString("es-CL")}` : "—"}</td>
-                  <td style={styles.td}>{v2 ? `$${v2.toLocaleString("es-CL")}` : "—"}</td>
+                  <td style={{...styles.td,fontWeight:600}}>{v1 ? clp(v1) : "—"}</td>
+                  <td style={styles.td}>{v2 ? clp(v2) : "—"}</td>
                   <td style={styles.td}>
                     {d && <span style={{color:dn>0?"#065F46":dn<0?"#991B1B":"#64748B",fontWeight:600,fontSize:"12px"}}>
                       {dn>0?"+":""}{d}%
