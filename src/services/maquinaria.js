@@ -56,7 +56,6 @@ export const servicios = {
 
 // ───────────── Clientes ─────────────
 // Los clientes de maquinaria tienen su propia tabla (clientes_maquinaria).
-// La tabla "Clientes" queda solo para PlantCare.
 const aUI = (c) => ({
   ...c,
   rut: c.rut_numero ? formatearRut(`${c.rut_numero}${c.rut_dv ?? ""}`) : "",
@@ -90,11 +89,11 @@ function aBD(f) {
 
 export const clientes = {
   listar: async () =>
-    (await traerTodo(() => supabase.from("empresas").select("*").order("nombre").order("id"))).map(aUI),
-  crear: async (f) => aUI(check(await supabase.from("empresas").insert(aBD(f)).select().single())),
-  actualizar: async (id, f) => aUI(check(await supabase.from("empresas").update(aBD(f)).eq("id", id).select().single())),
+    (await traerTodo(() => supabase.from("clientes_maquinaria").select("*").order("nombre").order("id"))).map(aUI),
+  crear: async (f) => aUI(check(await supabase.from("clientes_maquinaria").insert(aBD(f)).select().single())),
+  actualizar: async (id, f) => aUI(check(await supabase.from("clientes_maquinaria").update(aBD(f)).eq("id", id).select().single())),
   eliminar: async (id) => {
-    const { error } = await supabase.from("empresas").delete().eq("id", id)
+    const { error } = await supabase.from("clientes_maquinaria").delete().eq("id", id)
     if (error)
       throw new Error(
         error.code === "23503"
@@ -105,7 +104,7 @@ export const clientes = {
 }
 
 // ───────────── Arriendos ─────────────
-const SEL_ARRIENDO = "*, cliente:empresas(nombre), maquina:maquinas(nombre, modelo), servicio:servicios(nombre)"
+const SEL_ARRIENDO = "*, cliente:clientes_maquinaria(nombre), maquina:maquinas(nombre, modelo), servicio:servicios(nombre)"
 const COLS_ARRIENDO = [
   "cliente_id", "maquina_id", "servicio_id", "inicio", "fin", "cantidad", "unidad",
   "monto", "pagado", "estado", "notas", "predio", "comuna", "operador",
@@ -125,7 +124,7 @@ export const facturas = {
     traerTodo(() =>
       supabase
         .from("facturas")
-        .select("*, cliente:empresas(nombre), arriendo:arriendos(predio, maquina:maquinas(nombre, modelo), servicio:servicios(nombre))")
+        .select("*, cliente:clientes_maquinaria(nombre), arriendo:arriendos(predio, maquina:maquinas(nombre, modelo), servicio:servicios(nombre))")
         .order("fecha_emision", { ascending: false })
         .order("id")
     ),
@@ -157,7 +156,7 @@ export async function resumenMaquinaria() {
 
   const [maq, cli, delMes, recientes, mant] = await Promise.all([
     supabase.from("maquinas").select("id, estado"),
-    supabase.from("empresas").select("id", { count: "exact", head: true }).eq("activo", true),
+    supabase.from("clientes_maquinaria").select("id", { count: "exact", head: true }).eq("activo", true),
     supabase.from("arriendos").select("monto, estado").gte("inicio", ini).lte("inicio", fin),
     supabase
       .from("arriendos")
@@ -195,7 +194,7 @@ export const etiquetaMaquina = (m) => (m ? `${m.nombre} ${m.modelo}`.trim() : "�
 // Listas para los formularios de arriendo: clientes activos, máquinas y servicios (con sus máquinas)
 export async function catalogos() {
   const [cl, mq, sv] = await Promise.all([
-    traerTodo(() => supabase.from("empresas").select("id, nombre").eq("activo", true).order("nombre").order("id")),
+    traerTodo(() => supabase.from("clientes_maquinaria").select("id, nombre").eq("activo", true).order("nombre").order("id")),
     maquinas.listar(),
     servicios.listar(),
   ])
