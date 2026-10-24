@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react"
+﻿import { useEffect, useState } from "react"
 import { supabase } from "../lib/supabase"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
@@ -45,7 +45,7 @@ function DashboardPlantCare() {
   useEffect(() => {
     const cargarClientes = async () => {
       setLoadingClientes(true)
-      const { data, error } = await supabase.from("Clientes").select("id, nombre").order("nombre")
+      const { data, error } = await supabase.from("empresas").select("id, nombre").order("nombre")
       if (error) console.error("Error cargando clientes:", error)
       else setClientes(data || [])
       setLoadingClientes(false)
