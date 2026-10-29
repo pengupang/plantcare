@@ -113,21 +113,24 @@ function DashboardPlantCare() {
   }, [terrenoSeleccionado, variableHistorial])
 
   const obtenerRecomendacion = async () => {
-    if (!terrenoSeleccionado || !ultimaMedicion) return
-    setLoadingIA(true)
-    setErrorIA("")
-    setRecomendacion(null)
-    try {
-      // Ajusta los argumentos a lo que reciba tu función en lib/groq
-      const resultado = await generarRecomendacion(ultimaMedicion, observaciones)
-      setRecomendacion(resultado)
-    } catch (err) {
-      console.error(err)
-      setErrorIA("No se pudo generar la recomendación. Intenta nuevamente.")
-    } finally {
-      setLoadingIA(false)
-    }
+  if (!terrenoSeleccionado || !ultimaMedicion) return
+  setLoadingIA(true)
+  setErrorIA("")
+  setRecomendacion(null)
+  try {
+    // 1) Se pasa el id del terreno (UUID), no la medición
+    const resultado = await generarRecomendacion(terrenoSeleccionado.id, observaciones)
+
+    // 2) generarRecomendacion devuelve { recomendacion, clima }:
+    //    el panel solo necesita la parte de la recomendación
+    setRecomendacion(resultado.recomendacion)
+  } catch (err) {
+    console.error(err)
+    setErrorIA(err.message || "No se pudo generar la recomendación. Intenta nuevamente.")
+  } finally {
+    setLoadingIA(false)
   }
+}
 
   const metricasConfig = [
     { titulo: "Nitrógeno (N)", campo: "nitrogeno", unidad: "kg/ha", Icono: Leaf },
