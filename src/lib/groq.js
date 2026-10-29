@@ -1,329 +1,163 @@
-import { useEffect, useState } from "react"
-import { supabase } from "@/lib/supabase"
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts"
-import { Button } from "@/components/ui/button"
-import { Leaf, FlaskConical, Zap, TestTube, Droplets, Thermometer, Bot, AlertTriangle, 
-  CheckCircle2, ShieldAlert, RefreshCw, Wheat, Sprout, Flower, Info } from "lucide-react"
-import { MetricaCard } from "@/components/ui/MetricaCard"
-import { SearchableSelect } from "@/components/SearchableSelect"
-import { MapaTerreno } from "@/components/MapaTerreno"
+import { supabase } from "./supabase"
 
-function formatFecha(fechaISO) {
-  const d = new Date(fechaISO)
-  return d.toLocaleDateString("es-CL", { day: "2-digit", month: "2-digit" })
+// Genera una recomendación agronómica con IA (Groq/Llama), 100% desde
+// el navegador: sin backend propio, sin localhost, funciona en
+// cualquier PC apenas tenga internet. Se conecta directo a Supabase
+// para buscar la última medición, el cultivo y la referencia INIA, y
+// directo a Open-Meteo para el clima.
+
+const UBICACION_DEFAULT = { lat: -36.6067, lon: -72.1034 }
+
+// ---------------------------------------------------------
+// 1) Datos desde Supabase
+// ---------------------------------------------------------
+async function obtenerContexto(terrenoId) {
+  const { data: medicion, error: errMedicion } = await supabase
+    .from("Mediciones")
+    .select("*")
+    .eq("terreno_id", terrenoId)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle()
+
+  if (errMedicion) throw new Error("Error consultando Mediciones: " + errMedicion.message)
+  if (!medicion) throw new Error("Este terreno todavía no tiene mediciones registradas.")
+
+  const { data: terreno } = await supabase
+    .from("Terrenos")
+    .select("nombre, crop_key, coordenadas_centro")
+    .eq("id", terrenoId)
+    .maybeSingle()
+
+  let nombreCultivo = null
+  let referenciaINIA = null
+
+  if (terreno?.crop_key) {
+    const { data: crop } = await supabase
+      .from("CROPS")
+      .select('"CROP_NAME_ES"')
+      .eq("CROP_KEY", terreno.crop_key)
+      .maybeSingle()
+    nombreCultivo = crop?.CROP_NAME_ES ?? null
+
+    const { data: ptaData } = await supabase
+      .from("PTA_DATA")
+      .select("NITROGEN, PHOSPHORUS, POTASSIUM")
+      .eq("CROP_KEY", terreno.crop_key)
+      .eq("TISSUE_KEY", 2) // Hoja
+
+    if (ptaData?.length) {
+      const promedio = (campo) => {
+        const valores = ptaData.map((d) => d[campo]).filter((v) => v != null)
+        return valores.length ? valores.reduce((a, b) => a + b, 0) / valores.length : null
+      }
+      referenciaINIA = {
+        nitrogeno: promedio("NITROGEN"),
+        fosforo: promedio("PHOSPHORUS"),
+        potasio: promedio("POTASSIUM"),
+      }
+    }
+  }
+
+  return { medicion, terreno, nombreCultivo, referenciaINIA }
 }
 
-function DashboardPlantCare() {
-  const [clientes, setClientes] = useState([])
-  const [loadingClientes, setLoadingClientes] = useState(true)
+// ---------------------------------------------------------
+// 2) Groq: pedir la recomendación en JSON estricto
+// ---------------------------------------------------------
+async function pedirRecomendacionAGroq({ medicion, nombreCultivo, referenciaINIA, observacionesAdmin }) {
+  const apiKey = import.meta.env.VITE_GROQ_API_KEY
+  if (!apiKey) throw new Error("Falta VITE_GROQ_API_KEY en el .env")
 
-  const [clienteSeleccionado, setClienteSeleccionado] = useState(null)
-  const [terrenos, setTerrenos] = useState([])
-  const [loadingTerrenos, setLoadingTerrenos] = useState(false)
+  const valor = (campo, unidad = "") =>
+    medicion?.[campo] != null ? `${medicion[campo]}${unidad}` : "sin dato"
 
-  const [terrenoSeleccionado, setTerrenoSeleccionado] = useState(null)
-  const [ultimaMedicion, setUltimaMedicion] = useState(null)
-  const [historial, setHistorial] = useState([])
-  const [loadingMediciones, setLoadingMediciones] = useState(false)
+  let prompt = `Sos un asistente agronómico. Analizá SOLO estos 6 parámetros medidos en terreno (no inventes otros nutrientes):
 
-  const [variableHistorial, setVariableHistorial] = useState("nitrogeno")
+- Nitrógeno: ${valor("nitrogeno")}
+- Fósforo: ${valor("fosforo")}
+- Potasio: ${valor("potasio")}
+- pH: ${valor("ph")}
+- Humedad del suelo: ${valor("humedad_suelo", "%")}
+- Conductividad eléctrica: ${valor("ec")}
+`
 
-  useEffect(() => {
-    const cargarClientes = async () => {
-      setLoadingClientes(true)
-      const { data, error } = await supabase.from("clientes_plantcare").select("id, nombre").order("nombre")
-      if (!error) setClientes(data || [])
-      setLoadingClientes(false)
-    }
-    cargarClientes()
-  }, [])
+  if (nombreCultivo) prompt += `\nCultivo del terreno: ${nombreCultivo}.`
+  if (referenciaINIA) {
+    prompt += `\nReferencia INIA para este cultivo (promedio en hoja): Nitrógeno ${referenciaINIA.nitrogeno?.toFixed(2)}%, Fósforo ${referenciaINIA.fosforo?.toFixed(2)}%, Potasio ${referenciaINIA.potasio?.toFixed(2)}%.`
+  }
+  if (observacionesAdmin) prompt += `\nObservación del técnico en terreno: "${observacionesAdmin}".`
 
-  useEffect(() => {
-    if (!clienteSeleccionado) {
-      setTerrenos([])
-      setTerrenoSeleccionado(null)
-      return
-    }
-    const cargarTerrenos = async () => {
-      setLoadingTerrenos(true)
-      setTerrenoSeleccionado(null)
-      const { data, error } = await supabase
-        .from("terrenos")
-        .select("id, nombre, coordenadas_centro")
-        .eq("cliente_id", clienteSeleccionado.id)
-        .order("nombre")
-      if (!error) setTerrenos(data || [])
-      setLoadingTerrenos(false)
-    }
-    cargarTerrenos()
-  }, [clienteSeleccionado])
+  prompt += `
 
-  useEffect(() => {
-    if (!terrenoSeleccionado) {
-      setUltimaMedicion(null)
-      setHistorial([])
-      return
-    }
-    const cargarMediciones = async () => {
-      setLoadingMediciones(true)
-
-      const { data: ultima } = await supabase
-        .from("mediciones")
-        .select("*")
-        .eq("terreno_id", terrenoSeleccionado.id)
-        .order("created_at", { ascending: false })
-        .limit(1)
-        .maybeSingle()
-      setUltimaMedicion(ultima ?? null)
-
-      // Modificado para consultar dinámicamente la variable elegida
-      const { data: serie } = await supabase
-        .from("mediciones")
-        .select(`created_at, ${variableHistorial}`)
-        .eq("terreno_id", terrenoSeleccionado.id)
-        .order("created_at", { ascending: true })
-        .limit(20)
-      
-      setHistorial(
-        (serie ?? []).map((m) => ({
-          fecha: formatFecha(m.created_at),
-          valor: m[variableHistorial],
-        }))
-      )
-
-      setLoadingMediciones(false)
-    }
-    cargarMediciones()
-  }, [terrenoSeleccionado, variableHistorial]) // Añadido variableHistorial aquí para que recargue al cambiar
-
-  const metricasConfig = [
-    { titulo: "Nitrógeno (N)", campo: "nitrogeno", unidad: "kg/ha", Icono: Leaf },
-    { titulo: "Fósforo (P)", campo: "fosforo", unidad: "kg/ha", Icono: FlaskConical },
-    { titulo: "Potasio (K)", campo: "potasio", unidad: "kg/ha", Icono: Zap },
-    { titulo: "pH", campo: "ph", unidad: "pH", Icono: TestTube },
-    { titulo: "Humedad", campo: "humedad_suelo", unidad: "%", Icono: Droplets },
-    { titulo: "Temperatura", campo: "temperatura_suelo", unidad: "°C", Icono: Thermometer },
-    { titulo: "Conductividad", campo: "ec", unidad: "dS/m", Icono: Zap },
-    { titulo: "Humedad Ambiente", campo: "humedad_ambiente", unidad: "%", Icono: Droplets },
-    { titulo: "Temperatura Ambiente", campo: "temperatura_ambiente", unidad: "°C", Icono: Thermometer },
+Respondé ÚNICAMENTE con un JSON válido, sin texto adicional, con esta forma exacta:
+{
+  "estado_general": "una frase corta resumiendo el estado del terreno",
+  "alertas": ["alerta 1", "alerta 2"],
+  "recomendaciones": [
+    { "accion": "qué hacer", "prioridad": "alta|media|baja", "motivo": "por qué" }
   ]
+}
+Si no hay alertas, "alertas" debe ser un array vacío.`
 
-  return (
-    <div className="p-6 md:p-8 bg-slate-100 min-h-screen">
-      <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <h1 className="text-2xl font-bold text-slate-800">Dashboard de Administración</h1>
+  const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({
+      model: "openai/gpt-oss-120b",
+      messages: [{ role: "user", content: prompt }],
+      temperature: 0.3,
+      response_format: { type: "json_object" },
+    }),
+  })
 
-        <div className="flex flex-wrap gap-2">
-          <SearchableSelect
-            items={clientes}
-            value={clienteSeleccionado}
-            onChange={(cliente) => setClienteSeleccionado(cliente)}
-            placeholder={loadingClientes ? "Cargando clientes..." : "Seleccionar cliente"}
-            searchPlaceholder="Buscar cliente..."
-            disabled={loadingClientes}
-          />
+  if (!res.ok) {
+    const detalle = await res.json().catch(() => ({}))
+    throw new Error(detalle?.error?.message || "No se pudo generar la recomendación")
+  }
 
-          <SearchableSelect
-            items={terrenos}
-            value={terrenoSeleccionado}
-            onChange={(terreno) => setTerrenoSeleccionado(terreno)}
-            placeholder={!clienteSeleccionado ? "Elegí un cliente primero" : "Seleccionar Terreno"}
-            searchPlaceholder="Buscar terreno..."
-            disabled={!clienteSeleccionado || loadingTerrenos}
-          />
-        </div>
-      </div>
-
-      {!terrenoSeleccionado && (
-        <div className="mb-6 rounded-2xl bg-amber-50 p-4 border border-amber-200/80 text-amber-800 text-sm shadow-sm flex items-center gap-3">
-          <ShieldAlert className="w-5 h-5 text-amber-600 shrink-0" />
-          <span>Selecciona un cliente y un terreno específico para consultar las mediciones en la base de datos.</span>
-        </div>
-      )}
-
-      {terrenoSeleccionado && loadingMediciones && (
-        <p className="text-gray-500 mb-4 text-sm font-medium">Consultando registros en Supabase...</p>
-      )}
-
-      {terrenoSeleccionado && !loadingMediciones && !ultimaMedicion && (
-        <div className="mb-6 rounded-2xl bg-white p-6 border border-slate-200 text-slate-600 text-sm shadow-sm flex items-center justify-center gap-2.5">
-          <Info className="w-5 h-5 text-emerald-700 shrink-0" />
-          <span>Este terreno no cuenta con registros de mediciones en la base de datos actualmente.</span>
-        </div>
-      )}
-
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Columna Izquierda (2/3): Métricas, Gráfico y Mapa */}
-        <div className="lg:col-span-2 flex flex-col gap-6">
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {metricasConfig.map((m) => (
-              <MetricaCard
-                key={m.campo}
-                titulo={m.titulo}
-                campo={m.campo}
-                unidad={m.unidad}
-                Icono={m.Icono}
-                valor={ultimaMedicion ? ultimaMedicion[m.campo] : null}
-              />
-            ))}
-          </div>
-
-          {/* Gráfico de Historial */}
-          {/* Gráfico de Historial con Selector de Parámetro */}
-          <div className="rounded-2xl bg-white p-6 shadow-sm border border-slate-200/60">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
-              <h2 className="text-base font-bold text-slate-800">Historial de Mediciones</h2>
-              
-              {/* Selector de Parámetro con el mismo diseño y desactivado si no hay terreno */}
-              <div className="w-full sm:w-64">
-                <SearchableSelect
-                  items={metricasConfig.map(m => ({ id: m.campo, nombre: m.titulo }))}
-                  value={metricasConfig.find(m => m.campo === variableHistorial) ? { id: variableHistorial, nombre: metricasConfig.find(m => m.campo === variableHistorial).titulo } : null}
-                  onChange={(item) => setVariableHistorial(item ? item.id : 'nitrogeno')}
-                  placeholder="Seleccionar parámetro"
-                  disabled={!terrenoSeleccionado}
-                  showSearch={false}
-                />
-              </div>
-            </div>
-
-            {!terrenoSeleccionado && <p className="text-gray-500 text-sm">Seleccioná un cliente y un terreno para ver su historial.</p>}
-            {terrenoSeleccionado && loadingMediciones && <p className="text-gray-500 text-sm">Cargando...</p>}
-            {terrenoSeleccionado && !loadingMediciones && historial.length === 0 && (
-              <p className="text-gray-500 text-sm">Este terreno todavía no tiene mediciones registradas.</p>
-            )}
-            {terrenoSeleccionado && !loadingMediciones && historial.length > 0 && (
-              <ResponsiveContainer width="100%" height={260}>
-                <LineChart data={historial}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                  <XAxis dataKey="fecha" stroke="#64748b" />
-                  <YAxis stroke="#64748b" />
-                  <Tooltip />
-                  <Line type="monotone" dataKey="valor" stroke="#16a34a" strokeWidth={2} />
-                </LineChart>
-              </ResponsiveContainer>
-            )}
-          </div>
-
-          {/* Mapa de ubicación del terreno */}
-          <MapaTerreno terreno={terrenoSeleccionado} />
-        </div>
-
-        {/* Columna Derecha (1/3): Panel de IA */}
-        <div className="lg:col-span-1 flex flex-col gap-4">
-          <div className="rounded-2xl bg-white p-5 shadow-sm border border-slate-200/60">
-            <div className="flex items-center gap-2 mb-4 pb-3 border-b border-slate-100">
-              <div className="w-8 h-8 rounded-lg bg-green-100 text-green-700 flex items-center justify-center">
-                <Bot className="w-5 h-5" />
-              </div>
-              <div>
-                <h3 className="font-bold text-slate-800 text-sm">Asistente PlantCare</h3>
-                <p className="text-xs text-slate-500">Recomendaciones y Sugerencias</p>
-              </div>
-            </div>
-
-            {!terrenoSeleccionado ? (
-              <p className="text-sm text-slate-500 py-6 text-center">
-                Selecciona un terreno para activar el análisis inteligente del suelo.
-              </p>
-            ) : (
-              <div className="space-y-3">
-                <div className="p-3 rounded-xl bg-orange-50 border border-orange-100 flex gap-3 items-start">
-                  <AlertTriangle className="w-5 h-5 text-orange-600 shrink-0 mt-0.5" />
-                  <div>
-                    <h4 className="text-xs font-bold text-orange-800 uppercase tracking-wide">Precaución en Nitrógeno</h4>
-                    <p className="text-xs text-orange-700 mt-0.5">Los niveles actuales están por debajo del óptimo para el cultivo actual.</p>
-                  </div>
-                </div>
-
-                <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-100 flex gap-3 items-start">
-                  <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
-                  <div>
-                    <h4 className="text-xs font-bold text-emerald-800 uppercase tracking-wide">pH Estable</h4>
-                    <p className="text-xs text-emerald-700 mt-0.5">El nivel de acidez se encuentra dentro del rango adecuado de asimilación.</p>
-                  </div>
-                </div>
-
-                <div className="mt-4 pt-3 border-t border-slate-100">
-                  <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider block mb-2">Estado del Sistema</span>
-                  <div className="flex items-center justify-between text-xs text-slate-600 bg-slate-50 p-2.5 rounded-xl border border-slate-100">
-                    <span>Modelo conectado</span>
-                    <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
-          {/* Plan de Rotación de Cultivos */}
-          <div className="rounded-2xl bg-white p-5 shadow-sm border border-slate-200/60">
-            <div className="flex items-center gap-2 mb-4 pb-3 border-b border-slate-100">
-              <div className="w-8 h-8 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center">
-                <RefreshCw className="w-4 h-4" />
-              </div>
-              <h3 className="font-bold text-slate-800 text-sm">Plan de Rotación de Cultivos</h3>
-            </div>
-
-            {!terrenoSeleccionado ? (
-              <p className="text-sm text-slate-500 py-4 text-center">
-                Selecciona un terreno para ver su plan de rotación.
-              </p>
-            ) : (
-              <div className="space-y-3">
-                {/* Cultivo Actual */}
-                <div className="flex items-center justify-between p-3.5 rounded-xl bg-emerald-50/60 border border-emerald-100">
-                  <div className="flex items-center gap-3">
-                    <div className="w-9 h-9 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0">
-                      <Wheat className="w-4 h-4" />
-                    </div>
-                    <div>
-                      <h4 className="font-bold text-slate-800 text-xs">Trigo</h4>
-                      <p className="text-[11px] text-slate-500">Abr – Sep</p>
-                    </div>
-                  </div>
-                  <span className="bg-emerald-600 text-white text-[10px] font-semibold px-2.5 py-1 rounded-full shadow-sm">
-                    Actual
-                  </span>
-                </div>
-
-                {/* Cultivo Próximo */}
-                <div className="flex items-center justify-between p-3.5 rounded-xl bg-amber-50/60 border border-amber-100">
-                  <div className="flex items-center gap-3">
-                    <div className="w-9 h-9 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center shrink-0">
-                      <Sprout className="w-4 h-4" />
-                    </div>
-                    <div>
-                      <h4 className="font-bold text-slate-800 text-xs">Lupino</h4>
-                      <p className="text-[11px] text-slate-500">Oct – Feb</p>
-                    </div>
-                  </div>
-                  <span className="bg-amber-600 text-white text-[10px] font-semibold px-2.5 py-1 rounded-full shadow-sm">
-                    Próximo
-                  </span>
-                </div>
-
-                {/* Cultivo Planificado */}
-                <div className="flex items-center justify-between p-3.5 rounded-xl bg-slate-50 border border-slate-200/60">
-                  <div className="flex items-center gap-3">
-                    <div className="w-9 h-9 rounded-xl bg-slate-200 text-slate-700 flex items-center justify-center shrink-0">
-                      <Flower className="w-4 h-4" />
-                    </div>
-                    <div>
-                      <h4 className="font-bold text-slate-800 text-xs">Canola</h4>
-                      <p className="text-[11px] text-slate-500">Mar – Jul</p>
-                    </div>
-                  </div>
-                  <span className="bg-slate-200 text-slate-600 text-[10px] font-semibold px-2.5 py-1 rounded-full">
-                    Planificado
-                  </span>
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-        
-      </div>
-    </div>
-  )
+  const data = await res.json()
+  return JSON.parse(data.choices[0].message.content)
 }
 
-export default DashboardPlantCare
+// ---------------------------------------------------------
+// 3) Clima directo desde el navegador (Open-Meteo, sin key)
+// ---------------------------------------------------------
+async function obtenerClima(coordenadas) {
+  const lat = coordenadas?.lat ?? UBICACION_DEFAULT.lat
+  const lon = coordenadas?.lng ?? coordenadas?.lon ?? UBICACION_DEFAULT.lon
+
+  const url =
+    `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}` +
+    `&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max` +
+    `&timezone=auto&forecast_days=5`
+
+  const res = await fetch(url)
+  if (!res.ok) return []
+  const data = await res.json()
+
+  return data.daily.time.map((fecha, i) => ({
+    fecha,
+    codigo: data.daily.weather_code[i],
+    max: Math.round(data.daily.temperature_2m_max[i]),
+    min: Math.round(data.daily.temperature_2m_min[i]),
+    probLluvia: data.daily.precipitation_probability_max[i],
+  }))
+}
+
+// ---------------------------------------------------------
+// Función principal: la llama Mediciones.jsx directamente
+// ---------------------------------------------------------
+export async function generarRecomendacion(terrenoId, observacionesAdmin) {
+  const { medicion, terreno, nombreCultivo, referenciaINIA } = await obtenerContexto(terrenoId)
+
+  const [recomendacion, clima] = await Promise.all([
+    pedirRecomendacionAGroq({ medicion, nombreCultivo, referenciaINIA, observacionesAdmin }),
+    obtenerClima(terreno?.coordenadas_centro),
+  ])
+
+  return { recomendacion, clima }
+}
