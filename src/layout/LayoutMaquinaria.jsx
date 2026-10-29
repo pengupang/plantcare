@@ -2,6 +2,7 @@ import { useState } from "react"
 import { Outlet, useNavigate, useLocation } from "react-router-dom"
 import { supabase } from "../lib/supabase"
 import { useAuth } from "../context/AuthContext"
+import SelectorEmpresa from "../components/SelectorEmpresa"
 import {
   Wrench,
   FileText,
@@ -29,7 +30,7 @@ const navItems = [
 ]
 
 export default function LayoutMaquinaria() {
-  const { perfil } = useAuth()
+  const { perfil, contexto } = useAuth()
   const navigate = useNavigate()
   const location = useLocation()
   const [collapsed, setCollapsed] = useState(false)
@@ -94,8 +95,9 @@ export default function LayoutMaquinaria() {
             {navItems.find(i => i.path === location.pathname)?.label ?? "Dashboard"}
           </h2>
           <div style={styles.headerRight}>
+            <SelectorEmpresa />
             <span style={styles.userName}>{perfil?.email ?? "Usuario"}</span>
-            {perfil?.rol === "admin" && (
+            {contexto?.esAdmin && contexto.modulos.length > 1 && (
               <button onClick={() => navigate("/portal")} style={styles.logoutBtn} title="Cambiar de área">
                 <ArrowLeftRight size={16} />
                 <span>Cambiar de área</span>

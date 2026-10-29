@@ -2,7 +2,7 @@ import { useEffect, useState } from "react"
 import { useNavigate } from "react-router-dom"
 import { supabase } from "../lib/supabase"
 import { useAuth } from "../context/AuthContext"
-import { destinoPorRol } from "../lib/roles"
+import { destinoPara, normalizarContexto } from "../lib/roles"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Lock } from "lucide-react"
@@ -13,14 +13,20 @@ export default function Login() {
   const [error, setError] = useState(null)
   const [loading, setLoading] = useState(false)
   const navigate = useNavigate()
-  const { session, perfil, loading: authLoading } = useAuth()
+  const { session, perfil, contexto, loading: authLoading } = useAuth()
 
   // Si ya hay sesión activa, no mostrar el login: ir directo a su zona
   useEffect(() => {
     if (!authLoading && session && perfil) {
-      navigate(destinoPorRol[perfil.rol] ?? "/", { replace: true })
+      const destino = destinoPara(contexto)
+      if (destino) {
+        navigate(destino, { replace: true })
+      } else {
+        supabase.auth.signOut()
+        setError("Tu usuario no tiene una empresa o un módulo asignado")
+      }
     }
-  }, [authLoading, session, perfil, navigate])
+  }, [authLoading, session, perfil, contexto, navigate])
 
   const handleSubmit = async (e) => {
     e.preventDefault()
@@ -38,7 +44,7 @@ export default function Login() {
     }
 
     // 2) Login con Supabase Auth
-    const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
+    const { error: authError } = await supabase.auth.signInWithPassword({
       email,
       password,
     })
@@ -48,21 +54,18 @@ export default function Login() {
       return
     }
 
-    // 3) Rol -> destino
-    const { data: p } = await supabase
-      .from("perfiles")
-      .select("rol")
-      .eq("id", authData.user.id)
-      .maybeSingle()
+    // 3) Empresa activa y módulos -> destino
+    const { data: raw } = await supabase.rpc("contexto_actual")
+    const destino = destinoPara(normalizarContexto(raw))
 
-    if (!p) {
+    if (!destino) {
       await supabase.auth.signOut()
-      setError("Tu usuario no tiene un rol asignado")
+      setError("Tu usuario no tiene una empresa o un módulo asignado")
       setLoading(false)
       return
     }
 
-    navigate(destinoPorRol[p.rol] ?? "/", { replace: true })
+    navigate(destino, { replace: true })
   }
 
   return (

@@ -1,8 +1,20 @@
+import { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "../lib/supabase";
+import { useAuth } from "../context/AuthContext";
+import { destinoPorRol } from "../lib/roles";
+import SelectorEmpresa from "../components/SelectorEmpresa";
 
 export default function PortalAcceso() {
   const navigate = useNavigate();
+  const { contexto } = useAuth();
+
+  // Si la empresa activa tiene un solo módulo, no hay nada que elegir: ir directo
+  useEffect(() => {
+    if (contexto && contexto.modulos.length === 1) {
+      navigate(destinoPorRol[contexto.modulos[0]], { replace: true });
+    }
+  }, [contexto, navigate]);
 
   const cerrarSesion = async () => {
     await supabase.auth.signOut();
@@ -11,6 +23,9 @@ export default function PortalAcceso() {
 
   return (
     <div style={styles.container}>
+      <div style={{ position: "absolute", top: 16, left: 16, zIndex: 20 }}>
+        <SelectorEmpresa oscuro />
+      </div>
       <button
         onClick={cerrarSesion}
         style={{

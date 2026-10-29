@@ -1,13 +1,14 @@
-import { createContext, useContext, useEffect, useState } from "react"
+import { createContext, useCallback, useContext, useEffect, useState } from "react"
 import { supabase } from "../lib/supabase"
+import { normalizarContexto } from "../lib/roles"
 
 const AuthContext = createContext(null)
 
 export function AuthProvider({ children }) {
   // undefined = todavía no sabemos si hay sesión
   const [session, setSession] = useState(undefined)
-  // guardamos de qué usuario es el perfil para evitar mostrar el de otro
-  const [perfilState, setPerfilState] = useState({ userId: null, data: null })
+  // guardamos de qué usuario son los datos para evitar mostrar los de otro
+  const [datos, setDatos] = useState({ userId: null, perfil: null, contexto: null })
 
   // Efecto 1: sesión (el callback solo guarda la sesión, nada de consultas aquí)
   useEffect(() => {
@@ -20,32 +21,44 @@ export function AuthProvider({ children }) {
     return () => listener.subscription.unsubscribe()
   }, [])
 
-  // Efecto 2: perfil (rol) del usuario con sesión
+  // Efecto 2: perfil y empresa activa (con sus módulos y roles) del usuario con sesión
   const userId = session?.user?.id
   useEffect(() => {
     if (!userId) return
     let cancelled = false
 
-    supabase
-      .from("perfiles")
-      .select("id, rut, email, rol")
-      .eq("id", userId)
-      .maybeSingle()
-      .then(({ data }) => {
-        if (!cancelled) setPerfilState({ userId, data: data ?? null })
+    Promise.all([
+      supabase.from("perfiles").select("id, rut, email, rol").eq("id", userId).maybeSingle(),
+      supabase.rpc("contexto_actual"),
+    ]).then(([perfilRes, ctxRes]) => {
+      if (cancelled) return
+      setDatos({
+        userId,
+        perfil: perfilRes.data ?? null,
+        contexto: normalizarContexto(ctxRes.data),
       })
+    })
 
     return () => {
       cancelled = true
     }
   }, [userId])
 
-  const perfil = userId && perfilState.userId === userId ? perfilState.data : null
-  // cargando = no sabemos la sesión, o hay sesión pero aún no llega su perfil
-  const loading = session === undefined || (!!userId && perfilState.userId !== userId)
+  // Cambia la empresa activa y recarga la app para que todo se vuelva a pedir
+  const cambiarEmpresa = useCallback(async (empresaId) => {
+    const { error } = await supabase.rpc("cambiar_empresa", { p_empresa: empresaId })
+    if (error) throw error
+    window.location.assign("/")
+  }, [])
+
+  const actual = userId && datos.userId === userId
+  const perfil = actual ? datos.perfil : null
+  const contexto = actual ? datos.contexto : null
+  // cargando = no sabemos la sesión, o hay sesión pero aún no llegan sus datos
+  const loading = session === undefined || (!!userId && datos.userId !== userId)
 
   return (
-    <AuthContext.Provider value={{ session: session ?? null, perfil, loading }}>
+    <AuthContext.Provider value={{ session: session ?? null, perfil, contexto, loading, cambiarEmpresa }}>
       {children}
     </AuthContext.Provider>
   )

@@ -20,7 +20,6 @@ import VistaCalendarioArriendo from './pages/CalendarioMaquinas'
 import VistaHistoricosMaquinaria from './pages/HistoricoMaquinaria'
 import RebanoPotreros from './pages/RebanoPotreros'
 import Sanidad from './pages/Sanidad'
-import Genealogia from './pages/Genealogia'
 
 function App() {
   return (
@@ -35,7 +34,7 @@ function App() {
         </Route>
 
         {/* Páginas Maquinaria: admin y maquinaria */}
-        <Route element={<RequireRole allow={["admin", "maquinaria"]} />}>
+        <Route element={<RequireRole allow={["admin", "maquinaria"]} modulo="maquinaria" />}>
           <Route path="/maquinaria" element={<LayoutMaquinaria />}>
             <Route index element={<Navigate to="dashboard" replace />} />
             <Route path="dashboard" element={<DashboardMaquinaria />} />
@@ -50,7 +49,7 @@ function App() {
         </Route>
 
         {/* Páginas Lechería: admin y lecheria */}
-        <Route element={<RequireRole allow={["admin", "lecheria"]} />}>
+        <Route element={<RequireRole allow={["admin", "lecheria"]} modulo="lecheria" />}>
           <Route path="/lecheria" element={<LayoutLecheria />}>
             <Route index element={<Navigate to="dashboard" replace />} />
             <Route path="dashboard" element={<DashboardLecheria />} />
@@ -61,7 +60,6 @@ function App() {
             <Route path="historicos" element={<VistaHistoricosGastos />} />
             <Route path="rebano" element={<RebanoPotreros />} />
             <Route path="sanidad" element={<Sanidad />} />
-            <Route path='genealogia' element= {<Genealogia/>}/>
           </Route>
         </Route>
 

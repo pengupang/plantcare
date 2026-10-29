@@ -2,6 +2,7 @@ import { useState } from "react"
 import { Outlet, useNavigate, useLocation } from "react-router-dom"
 import { supabase } from "../lib/supabase"
 import { useAuth } from "../context/AuthContext"
+import SelectorEmpresa from "../components/SelectorEmpresa"
 import {
   Leaf,
   ShoppingBasket,
@@ -16,7 +17,6 @@ import {
   ArrowLeftRight,
   PawPrint, 
   Stethoscope,
-  GitBranch
 } from "lucide-react"
 
 const navItems = [
@@ -28,11 +28,10 @@ const navItems = [
   { label: "Gastos Históricos",   icon: PieChart,        path: "/lecheria/historicos" },
   { label: "Rebaño y Potreros", icon: PawPrint,    path: "/lecheria/rebano" },
   { label: "Sanidad y Manejo",  icon: Stethoscope, path: "/lecheria/sanidad" },
-  { label: "Genealogía", icon: GitBranch, path: "/lecheria/genealogia" },
 ]
 
 export default function LayoutLecheria() {
-  const { perfil } = useAuth()
+  const { perfil, contexto } = useAuth()
   const navigate = useNavigate()
   const location = useLocation()
   const [collapsed, setCollapsed] = useState(false)
@@ -97,8 +96,9 @@ export default function LayoutLecheria() {
             {navItems.find(i => i.path === location.pathname)?.label ?? "Dashboard"}
           </h2>
           <div style={styles.headerRight}>
+            <SelectorEmpresa />
             <span style={styles.userName}>{perfil?.email ?? "Usuario"}</span>
-            {perfil?.rol === "admin" && (
+            {contexto?.esAdmin && contexto.modulos.length > 1 && (
               <button onClick={() => navigate("/portal")} style={styles.logoutBtn} title="Cambiar de área">
                 <ArrowLeftRight size={16} />
                 <span>Cambiar de área</span>
