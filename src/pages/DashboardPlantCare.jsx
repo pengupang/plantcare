@@ -64,7 +64,7 @@ function DashboardPlantCare() {
       setTerrenoSeleccionado(null)
       
       const { data, error } = await supabase
-        .from("Terrenos")
+        .from("terrenos")
         .select("id, nombre")
         .eq("cliente_id", clienteSeleccionado.id)
         .order("nombre")

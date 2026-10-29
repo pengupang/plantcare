@@ -13,7 +13,7 @@ const UBICACION_DEFAULT = { lat: -36.6067, lon: -72.1034 }
 // ---------------------------------------------------------
 async function obtenerContexto(terrenoId) {
   const { data: medicion, error: errMedicion } = await supabase
-    .from("Mediciones")
+    .from("mediciones")
     .select("*")
     .eq("terreno_id", terrenoId)
     .order("created_at", { ascending: false })
@@ -24,7 +24,7 @@ async function obtenerContexto(terrenoId) {
   if (!medicion) throw new Error("Este terreno todavía no tiene mediciones registradas.")
 
   const { data: terreno } = await supabase
-    .from("Terrenos")
+    .from("terrenos")
     .select("nombre, crop_key, coordenadas_centro")
     .eq("id", terrenoId)
     .maybeSingle()
