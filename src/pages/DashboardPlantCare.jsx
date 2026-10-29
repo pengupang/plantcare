@@ -1,30 +1,23 @@
 ﻿import { useEffect, useState } from "react"
-import { supabase } from "../lib/supabase"
-import { Input } from "@/components/ui/input"
+import { supabase } from "@/lib/supabase"
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts"
 import { Button } from "@/components/ui/button"
-import { Cloud, Sun, CloudRain, Thermometer, Droplets, Leaf, FlaskConical, Zap, 
-  TestTube, Activity, CheckCircle2, ShieldAlert, Clock, User, FileText, Info, AlertTriangle } from "lucide-react"
+import { Input } from "@/components/ui/input"
+import {
+  Leaf, FlaskConical, Zap, TestTube, Droplets, Thermometer,
+  ShieldAlert, Info, User, Clock, FileText
+} from "lucide-react"
 import { MetricaCard } from "@/components/ui/MetricaCard"
 import { SearchableSelect } from "@/components/SearchableSelect"
-import { generarRecomendacion } from "../lib/groq"
+import { MapaTerreno } from "@/components/MapaTerreno"
+import { generarRecomendacion } from "@/lib/groq"
 
-const getWeatherIcon = (code) => {
-  if (code === 0 || code === 1) return <Sun className="h-6 w-6 text-yellow-500" />
-  if (code >= 51 && code <= 65) return <CloudRain className="h-6 w-6 text-blue-500" />
-  if (code >= 80 && code <= 82) return <CloudRain className="h-6 w-6 text-blue-600" />
-  return <Cloud className="h-6 w-6 text-gray-400" />
-}
-
-function formatDia(fechaISO) {
-  const d = new Date(fechaISO + "T00:00:00")
-  return d.toLocaleDateString("es-CL", { weekday: "short", day: "numeric" })
+function formatFecha(fechaISO) {
+  const d = new Date(fechaISO)
+  return d.toLocaleDateString("es-CL", { day: "2-digit", month: "2-digit" })
 }
 
 function DashboardPlantCare() {
-
-  const [estadoValidacion, setEstadoValidacion] = useState("pendiente") // 'pendiente', 'validada', 'anomalia'
-  const [confirmandoAccion, setConfirmandoAccion] = useState(null) // null, 'aprobar', 'anomalia'
-
   const [clientes, setClientes] = useState([])
   const [loadingClientes, setLoadingClientes] = useState(true)
 
@@ -34,20 +27,22 @@ function DashboardPlantCare() {
 
   const [terrenoSeleccionado, setTerrenoSeleccionado] = useState(null)
   const [ultimaMedicion, setUltimaMedicion] = useState(null)
+  const [historial, setHistorial] = useState([])
   const [loadingMediciones, setLoadingMediciones] = useState(false)
 
+  const [variableHistorial, setVariableHistorial] = useState("nitrogeno")
+
+  // Estado del panel de IA
   const [observaciones, setObservaciones] = useState("")
   const [recomendacion, setRecomendacion] = useState(null)
-  const [pronosticoClima, setPronosticoClima] = useState([])
   const [loadingIA, setLoadingIA] = useState(false)
-  const [errorIA, setErrorIA] = useState(null)
+  const [errorIA, setErrorIA] = useState("")
 
   useEffect(() => {
     const cargarClientes = async () => {
       setLoadingClientes(true)
-      const { data, error } = await supabase.from("empresas").select("id, nombre").order("nombre")
-      if (error) console.error("Error cargando clientes:", error)
-      else setClientes(data || [])
+      const { data, error } = await supabase.from("clientes_plantcare").select("id, nombre").order("nombre")
+      if (!error) setClientes(data || [])
       setLoadingClientes(false)
     }
     cargarClientes()
@@ -62,97 +57,94 @@ function DashboardPlantCare() {
     const cargarTerrenos = async () => {
       setLoadingTerrenos(true)
       setTerrenoSeleccionado(null)
-      
       const { data, error } = await supabase
         .from("terrenos")
-        .select("id, nombre")
+        .select("id, nombre, coordenadas_centro")
         .eq("cliente_id", clienteSeleccionado.id)
         .order("nombre")
-
-      if (error) console.error("Error cargando terrenos:", error)
-      else setTerrenos(data || [])
-      
+      if (!error) setTerrenos(data || [])
       setLoadingTerrenos(false)
     }
     cargarTerrenos()
   }, [clienteSeleccionado])
 
+  // Al cambiar de terreno, limpiar el diagnóstico anterior
+  useEffect(() => {
+    setRecomendacion(null)
+    setErrorIA("")
+    setObservaciones("")
+  }, [terrenoSeleccionado])
+
   useEffect(() => {
     if (!terrenoSeleccionado) {
       setUltimaMedicion(null)
-      setRecomendacion(null)
-      setPronosticoClima([])
-      setErrorIA(null)
+      setHistorial([])
       return
     }
-
-    const cargarMedicionReal = async () => {
+    const cargarMediciones = async () => {
       setLoadingMediciones(true)
-      setRecomendacion(null)
-      setPronosticoClima([])
-      setErrorIA(null)
 
-      const { data, error } = await supabase
-        .from("Mediciones")
+      const { data: ultima } = await supabase
+        .from("mediciones")
         .select("*")
         .eq("terreno_id", terrenoSeleccionado.id)
         .order("created_at", { ascending: false })
         .limit(1)
         .maybeSingle()
+      setUltimaMedicion(ultima ?? null)
 
-      if (error) {
-        console.error("Error al consultar mediciones en Supabase:", error)
-        setUltimaMedicion(null)
-      } else {
-        setUltimaMedicion(data ?? null)
-      }
+      const { data: serie } = await supabase
+        .from("mediciones")
+        .select(`created_at, ${variableHistorial}`)
+        .eq("terreno_id", terrenoSeleccionado.id)
+        .order("created_at", { ascending: true })
+        .limit(20)
+
+      setHistorial(
+        (serie ?? []).map((m) => ({
+          fecha: formatFecha(m.created_at),
+          valor: m[variableHistorial],
+        }))
+      )
 
       setLoadingMediciones(false)
     }
+    cargarMediciones()
+  }, [terrenoSeleccionado, variableHistorial])
 
-    cargarMedicionReal()
-  }, [terrenoSeleccionado])
-
-  const valor = (campo) => (ultimaMedicion && ultimaMedicion[campo] != null ? ultimaMedicion[campo] : null)
-
-const obtenerRecomendacion = async () => {
-  if (!terrenoSeleccionado || !ultimaMedicion) return
-  setLoadingIA(true)
-  setErrorIA(null)
-  setRecomendacion(null)
-  setPronosticoClima([])
-
-  try {
-    const { recomendacion, clima } = await generarRecomendacion(terrenoSeleccionado.id, observaciones)
-    setRecomendacion(recomendacion)
-    setPronosticoClima(clima || [])
-  } catch (e) {
-    console.error(e)
-    setErrorIA(e.message || "No se pudo generar la recomendación.")
-  } finally {
-    setLoadingIA(false)
+  const obtenerRecomendacion = async () => {
+    if (!terrenoSeleccionado || !ultimaMedicion) return
+    setLoadingIA(true)
+    setErrorIA("")
+    setRecomendacion(null)
+    try {
+      // Ajusta los argumentos a lo que reciba tu función en lib/groq
+      const resultado = await generarRecomendacion(ultimaMedicion, observaciones)
+      setRecomendacion(resultado)
+    } catch (err) {
+      console.error(err)
+      setErrorIA("No se pudo generar la recomendación. Intenta nuevamente.")
+    } finally {
+      setLoadingIA(false)
+    }
   }
-}
-  const metricos = [
+
+  const metricasConfig = [
     { titulo: "Nitrógeno (N)", campo: "nitrogeno", unidad: "kg/ha", Icono: Leaf },
     { titulo: "Fósforo (P)", campo: "fosforo", unidad: "kg/ha", Icono: FlaskConical },
     { titulo: "Potasio (K)", campo: "potasio", unidad: "kg/ha", Icono: Zap },
-    { titulo: "pH del Suelo", campo: "ph", unidad: "pH", Icono: TestTube },
-    { titulo: "Humedad del Suelo", campo: "humedad_suelo", unidad: "%", Icono: Droplets },
-    { titulo: "Temperatura del Suelo", campo: "temperatura_suelo", unidad: "°C", Icono: Thermometer },
-    { titulo: "Conductividad", campo: "ec", unidad: "dS/m", Icono: Activity },
+    { titulo: "pH", campo: "ph", unidad: "pH", Icono: TestTube },
+    { titulo: "Humedad", campo: "humedad_suelo", unidad: "%", Icono: Droplets },
+    { titulo: "Temperatura", campo: "temperatura_suelo", unidad: "°C", Icono: Thermometer },
+    { titulo: "Conductividad", campo: "ec", unidad: "dS/m", Icono: Zap },
     { titulo: "Humedad Ambiente", campo: "humedad_ambiente", unidad: "%", Icono: Droplets },
     { titulo: "Temperatura Ambiente", campo: "temperatura_ambiente", unidad: "°C", Icono: Thermometer },
   ]
 
   return (
     <div className="p-6 md:p-8 bg-slate-100 min-h-screen">
-      {/* Header de la sección */}
       <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-800">Mediciones y Diagnóstico IA</h1>
-          <p className="text-xs text-slate-500 mt-0.5">Supervisión técnica, validación de sensores y recomendaciones de cultivo</p>
-        </div>
+        <h1 className="text-2xl font-bold text-slate-800">Dashboard de Administración</h1>
 
         <div className="flex flex-wrap gap-2">
           <SearchableSelect
@@ -193,161 +185,64 @@ const obtenerRecomendacion = async () => {
         </div>
       )}
 
-      {/* Grid Principal de 2 Columnas */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        
-        {/* Columna Izquierda Principal (2/3): Validación y Métricas */}
+        {/* Columna Izquierda (2/3): Métricas, Gráfico y Mapa */}
         <div className="lg:col-span-2 flex flex-col gap-6">
-          
-          
-          {/* Panel de Supervisión y Validación de Lectura HU-ADM-04 */}
-          {terrenoSeleccionado && ultimaMedicion && (
-            <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200/60 flex flex-col gap-4">
-              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-                <div className="flex items-center gap-3">
-                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center border ${
-                    estadoValidacion === 'validada' ? 'bg-emerald-50 text-emerald-700 border-emerald-100' :
-                    estadoValidacion === 'anomalia' ? 'bg-red-50 text-red-600 border-red-100' :
-                    'bg-amber-50 text-amber-700 border-amber-100'
-                  }`}>
-                    {estadoValidacion === 'validada' ? <CheckCircle2 className="w-5 h-5" /> :
-                     estadoValidacion === 'anomalia' ? <AlertTriangle className="w-5 h-5" /> :
-                     <Clock className="w-5 h-5" />}
-                  </div>
-                  <div>
-                    <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Estado de Lectura IoT</h3>
-                    <p className="text-sm font-semibold text-slate-700 flex items-center gap-2 mt-0.5">
-                      <span className={`w-2.5 h-2.5 rounded-full ${
-                        estadoValidacion === 'validada' ? 'bg-emerald-500' :
-                        estadoValidacion === 'anomalia' ? 'bg-red-500' :
-                        'bg-amber-500'
-                      }`}></span>
-                      {estadoValidacion === 'validada' ? 'Lectura Aprobada y Validada' :
-                       estadoValidacion === 'anomalia' ? 'Marcada con Anomalía Técnica' :
-                       'Pendiente de Supervisión'}
-                    </p>
-                  </div>
-                </div>
-
-                {/* Botones de Acción Rápida */}
-                {estadoValidacion === 'pendiente' && !confirmandoAccion && (
-                  <div className="flex items-center gap-2 w-full sm:w-auto">
-                    <Button
-                      onClick={() => setConfirmandoAccion('aprobar')}
-                      size="sm"
-                      className="bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl text-xs h-9 shadow-sm"
-                    >
-                      Aprobar lectura
-                    </Button>
-                    <Button
-                      onClick={() => setConfirmandoAccion('anomalia')}
-                      size="sm"
-                      variant="outline"
-                      className="text-red-600 border-red-200 hover:bg-red-50 hover:text-red-700 rounded-xl text-xs h-9"
-                    >
-                      Marcar anomalía
-                    </Button>
-                  </div>
-                )}
-
-                {estadoValidacion !== 'pendiente' && !confirmandoAccion && (
-                  <Button
-                    onClick={() => setEstadoValidacion('pendiente')}
-                    size="sm"
-                    variant="outline"
-                    className="text-slate-600 border-slate-200 hover:bg-slate-50 rounded-xl text-xs h-9"
-                  >
-                    Cambiar estado
-                  </Button>
-                )}
-              </div>
-
-              {/* Tarjeta de Confirmación Interactiva */}
-              {confirmandoAccion && (
-                <div className={`p-4 rounded-xl border flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 animate-fadeIn ${
-                  confirmandoAccion === 'aprobar' ? 'bg-emerald-50/80 border-emerald-200' : 'bg-red-50/80 border-red-200'
-                }`}>
-                  <div className="text-xs">
-                    <p className={`font-bold ${confirmandoAccion === 'aprobar' ? 'text-emerald-900' : 'text-red-900'}`}>
-                      {confirmandoAccion === 'aprobar' 
-                        ? '¿Está seguro de confirmar la lectura?' 
-                        : '¿Está seguro de marcar esta medición como anomalía?'}
-                    </p>
-                    <p className={`mt-0.5 ${confirmandoAccion === 'aprobar' ? 'text-emerald-700' : 'text-red-700'}`}>
-                      Esta acción actualizará el registro oficial en la base de datos.
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-2 w-full sm:w-auto shrink-0">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => setConfirmandoAccion(null)}
-                      className="h-8 text-xs rounded-lg bg-white border-slate-200"
-                    >
-                      Cancelar
-                    </Button>
-                    <Button
-                      size="sm"
-                      onClick={() => {
-                        const nuevoEstado = confirmandoAccion === 'aprobar' ? 'validada' : 'anomalia';
-                        
-                        /* =========================================================================
-                         * cuando esté lista la columna 'estado_validacion' 
-                         * en la tabla 'Mediciones' de Supabase, descomentar el bloque de abajo 
-                         * para guardar el estado de forma persistente.
-                         * =========================================================================
-                         * 
-                         * const actualizarSupabase = async () => {
-                         *   const { error } = await supabase
-                         *     .from("Mediciones")
-                         *     .update({ estado_validacion: nuevoEstado })
-                         *     .eq("id", ultimaMedicion.id);
-                         * 
-                         *   if (error) {
-                         *     console.error("Error al actualizar estado en Supabase:", error);
-                         *   }
-                         * };
-                         * actualizarSupabase();
-                         * ========================================================================= */
-
-                        // Actualización visual local 
-                        setEstadoValidacion(nuevoEstado);
-                        setConfirmandoAccion(null);
-                        if (ultimaMedicion) {
-                          setUltimaMedicion({ ...ultimaMedicion, estado_validacion: nuevoEstado });
-                        }
-                      }}
-                      className={`h-8 text-xs rounded-lg text-white ${
-                        confirmandoAccion === 'aprobar' ? 'bg-emerald-700 hover:bg-emerald-800' : 'bg-red-600 hover:bg-red-700'
-                      }`}
-                    >
-                      Sí, confirmar
-                    </Button>
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Cuadrícula de Métricas de Suelo */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {metricos.map((m) => (
+            {metricasConfig.map((m) => (
               <MetricaCard
                 key={m.campo}
                 titulo={m.titulo}
                 campo={m.campo}
                 unidad={m.unidad}
                 Icono={m.Icono}
-                valor={valor(m.campo)}
+                valor={ultimaMedicion ? ultimaMedicion[m.campo] : null}
               />
             ))}
           </div>
 
+          {/* Gráfico de Historial con Selector de Parámetro */}
+          <div className="rounded-2xl bg-white p-6 shadow-sm border border-slate-200/60">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+              <h2 className="text-base font-bold text-slate-800">Historial de Mediciones</h2>
+
+              <div className="w-full sm:w-64">
+                <SearchableSelect
+                  items={metricasConfig.map(m => ({ id: m.campo, nombre: m.titulo }))}
+                  value={metricasConfig.find(m => m.campo === variableHistorial) ? { id: variableHistorial, nombre: metricasConfig.find(m => m.campo === variableHistorial).titulo } : null}
+                  onChange={(item) => setVariableHistorial(item ? item.id : 'nitrogeno')}
+                  placeholder="Seleccionar parámetro"
+                  disabled={!terrenoSeleccionado}
+                  showSearch={false}
+                />
+              </div>
+            </div>
+
+            {!terrenoSeleccionado && <p className="text-gray-500 text-sm">Seleccioná un cliente y un terreno para ver su historial.</p>}
+            {terrenoSeleccionado && loadingMediciones && <p className="text-gray-500 text-sm">Cargando...</p>}
+            {terrenoSeleccionado && !loadingMediciones && historial.length === 0 && (
+              <p className="text-gray-500 text-sm">Este terreno todavía no tiene mediciones registradas.</p>
+            )}
+            {terrenoSeleccionado && !loadingMediciones && historial.length > 0 && (
+              <ResponsiveContainer width="100%" height={260}>
+                <LineChart data={historial}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                  <XAxis dataKey="fecha" stroke="#64748b" />
+                  <YAxis stroke="#64748b" />
+                  <Tooltip />
+                  <Line type="monotone" dataKey="valor" stroke="#16a34a" strokeWidth={2} />
+                </LineChart>
+              </ResponsiveContainer>
+            )}
+          </div>
+
+          {/* Mapa de ubicación del terreno */}
+          <MapaTerreno terreno={terrenoSeleccionado} />
         </div>
 
-        {/* Columna Derecha Lateral (1/3): Control Operativo, Bitácora IA y Clima Regional */}
+        {/* Columna Derecha Lateral (1/3): Control Operativo y Bitácora IA */}
         <div className="lg:col-span-1 flex flex-col gap-6">
-          
+
           {/* Módulo de Trazabilidad y Visita a Terreno (HU-ADM-03) */}
           <div className="rounded-2xl bg-white p-5 shadow-sm border border-slate-200/60">
             <div className="flex items-center gap-2 mb-4 pb-3 border-b border-slate-100">
@@ -367,13 +262,13 @@ const obtenerRecomendacion = async () => {
             ) : (
               <div className="space-y-3 text-xs">
                 <div className="flex items-center justify-between p-2.5 bg-slate-50 rounded-xl border border-slate-100">
-                  <span className="text-slate-500 flex items-center gap-1.5 font-medium"><User className="w-3.5 h-3.5 text-slate-400"/> Técnico a cargo:</span>
+                  <span className="text-slate-500 flex items-center gap-1.5 font-medium"><User className="w-3.5 h-3.5 text-slate-400" /> Técnico a cargo:</span>
                   {/* TODO: Vincular con columna tecnico_responsable en Supabase */}
                   <span className="font-semibold text-slate-700">Administrador / IoT</span>
                 </div>
 
                 <div className="flex items-center justify-between p-2.5 bg-slate-50 rounded-xl border border-slate-100">
-                  <span className="text-slate-500 flex items-center gap-1.5 font-medium"><Clock className="w-3.5 h-3.5 text-slate-400"/> Sincronización:</span>
+                  <span className="text-slate-500 flex items-center gap-1.5 font-medium"><Clock className="w-3.5 h-3.5 text-slate-400" /> Sincronización:</span>
                   <span className="font-semibold text-slate-700">
                     {ultimaMedicion?.created_at ? new Date(ultimaMedicion.created_at).toLocaleDateString("es-CL") : "N/A"}
                   </span>
@@ -389,12 +284,12 @@ const obtenerRecomendacion = async () => {
               <span>Bitácora de Observaciones Técnicas</span>
             </div>
 
-            <Input 
-              type="text" 
-              placeholder="Ej. Aplicar riego nocturno adicional..." 
+            <Input
+              type="text"
+              placeholder="Ej. Aplicar riego nocturno adicional..."
               value={observaciones}
               onChange={(e) => setObservaciones(e.target.value)}
-              className="h-10 rounded-xl border border-slate-200 bg-slate-50/50 p-3 text-xs" 
+              className="h-10 rounded-xl border border-slate-200 bg-slate-50/50 p-3 text-xs"
             />
 
             <Button
@@ -434,7 +329,7 @@ const obtenerRecomendacion = async () => {
                           <div className="flex justify-between items-start mb-1">
                             <span className="font-bold text-slate-800">{r.accion}</span>
                             <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-semibold ${
-                              r.prioridad === 'alta' ? 'bg-red-100 text-red-700' : 
+                              r.prioridad === 'alta' ? 'bg-red-100 text-red-700' :
                               r.prioridad === 'media' ? 'bg-yellow-100 text-yellow-700' : 'bg-emerald-100 text-emerald-700'
                             }`}>
                               {r.prioridad}
@@ -449,32 +344,7 @@ const obtenerRecomendacion = async () => {
               </div>
             )}
           </div>
-
-          {/* Panel de Pronóstico del Clima Regional */}
-          {pronosticoClima.length > 0 && (
-            <div className="space-y-3 bg-white p-5 rounded-2xl shadow-sm border border-slate-200/60">
-              <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Clima Regional Considerado</h4>
-              <div className="flex flex-col gap-2.5">
-                {pronosticoClima.map((dia, idx) => (
-                  <div key={idx} className="flex items-center justify-between bg-slate-50 p-2.5 rounded-xl border border-slate-100 shadow-sm">
-                    <div>
-                      <p className="font-semibold capitalize text-xs text-slate-800">{formatDia(dia.fecha)}</p>
-                      <div className="flex items-center gap-1 mt-0.5 text-xs text-slate-500">
-                        <Thermometer className="h-3 w-3" /> {dia.min}° - {dia.max}°
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs text-blue-600 font-medium">{dia.probLluvia}%</span>
-                      {getWeatherIcon(dia.codigo)}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
         </div>
-
       </div>
     </div>
   )
